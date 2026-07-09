@@ -1,0 +1,116 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 880 520" width="100%" role="img" aria-label="Wasabi UI: a vertical service sidebar beside a chat window">
+  <defs>
+    <style>
+      :root { color-scheme: light dark; }
+      .win     { fill: #ffffff; }
+      .sidebar { fill: #f2f2f4; }
+      .stroke  { stroke: #d9d9de; }
+      .ink     { fill: #1c1c1e; }
+      .muted   { fill: #8e8e93; }
+      .faint   { fill: #c7c7cc; }
+      .bubble-in  { fill: #e9e9eb; }
+      .bubble-out { fill: #7cc34a; }   /* wasabi green */
+      .accent  { fill: #7cc34a; }
+      .asleep  { opacity: .38; }
+      @media (prefers-color-scheme: dark) {
+        .win     { fill: #1c1c1e; }
+        .sidebar { fill: #141416; }
+        .stroke  { stroke: #38383a; }
+        .ink     { fill: #f2f2f7; }
+        .muted   { fill: #8e8e93; }
+        .faint   { fill: #48484a; }
+        .bubble-in  { fill: #2c2c2e; }
+      }
+    </style>
+  </defs>
+
+  <!-- window -->
+  <rect x="8" y="8" width="864" height="504" rx="16" class="win stroke" stroke-width="1.5"/>
+
+  <!-- traffic lights -->
+  <circle cx="34" cy="34" r="6" fill="#ff5f57"/>
+  <circle cx="54" cy="34" r="6" fill="#febc2e"/>
+  <circle cx="74" cy="34" r="6" fill="#28c840"/>
+
+  <!-- sidebar -->
+  <path d="M8 24 h96 V496 a16 16 0 0 1 -16 16 H24 a16 16 0 0 1 -16 -16 Z" class="sidebar"/>
+  <line x1="104" y1="24" x2="104" y2="512" class="stroke" stroke-width="1.5"/>
+
+  <!-- service icons -->
+  <!-- active: green ring -->
+  <g transform="translate(56,90)">
+    <circle r="24" class="accent" opacity=".15"/>
+    <circle r="24" fill="none" stroke="#7cc34a" stroke-width="2.5"/>
+    <circle r="17" fill="#25d366"/>
+    <path d="M-6 5 a8 8 0 1 1 3 3 l-4 1 z" fill="#fff"/>
+  </g>
+  <text x="56" y="128" text-anchor="middle" font-family="-apple-system,Helvetica,Arial" font-size="9" class="muted">WhatsApp</text>
+
+  <!-- telegram, awake -->
+  <g transform="translate(56,168)">
+    <circle r="17" fill="#2aabee"/>
+    <path d="M-8 1 L8 -6 L5 8 L0 3 L-3 6 Z" fill="#fff"/>
+  </g>
+
+  <!-- asleep services (dimmed) -->
+  <g transform="translate(56,232)" class="asleep">
+    <circle r="17" fill="#5865f2"/>
+  </g>
+  <g transform="translate(56,288)" class="asleep">
+    <circle r="17" fill="#ff6f00"/>
+  </g>
+
+  <!-- moon on an asleep one -->
+  <g transform="translate(70,222)" class="muted">
+    <path d="M4 0 a5 5 0 1 0 4 6 a4 4 0 0 1 -4 -6 z" fill="#8e8e93"/>
+  </g>
+
+  <!-- add button -->
+  <g transform="translate(56,352)">
+    <circle r="16" fill="none" class="stroke" stroke-width="1.5" stroke-dasharray="3 3"/>
+    <path d="M-7 0 H7 M0 -7 V7" stroke="#8e8e93" stroke-width="2" stroke-linecap="round"/>
+  </g>
+
+  <!-- ===== chat pane ===== -->
+  <!-- header -->
+  <circle cx="140" cy="66" r="16" fill="#25d366"/>
+  <path d="M136 70 a5 5 0 1 1 2 2 l-2.5 .6 z" fill="#fff"/>
+  <rect x="166" y="58" width="120" height="9" rx="4.5" class="ink"/>
+  <rect x="166" y="73" width="72"  height="7" rx="3.5" class="muted"/>
+  <line x1="128" y1="96" x2="856" y2="96" class="stroke" stroke-width="1"/>
+
+  <!-- incoming bubbles -->
+  <rect x="150" y="120" width="240" height="34" rx="12" class="bubble-in"/>
+  <rect x="166" y="131" width="180" height="7" rx="3.5" class="muted"/>
+  <rect x="166" y="142" width="120" height="7" rx="3.5" class="faint"/>
+
+  <rect x="150" y="168" width="180" height="24" rx="12" class="bubble-in"/>
+  <rect x="166" y="177" width="120" height="7" rx="3.5" class="muted"/>
+
+  <!-- outgoing bubbles (green, right-aligned) -->
+  <rect x="520" y="216" width="290" height="34" rx="12" class="bubble-out"/>
+  <rect x="536" y="227" width="230" height="7" rx="3.5" fill="#ffffff" opacity=".85"/>
+  <rect x="536" y="238" width="150" height="7" rx="3.5" fill="#ffffff" opacity=".6"/>
+
+  <rect x="610" y="264" width="200" height="24" rx="12" class="bubble-out"/>
+  <rect x="626" y="273" width="150" height="7" rx="3.5" fill="#ffffff" opacity=".85"/>
+
+  <!-- incoming again -->
+  <rect x="150" y="304" width="210" height="24" rx="12" class="bubble-in"/>
+  <rect x="166" y="313" width="150" height="7" rx="3.5" class="muted"/>
+
+  <!-- composer -->
+  <rect x="150" y="452" width="660" height="40" rx="20" fill="none" class="stroke" stroke-width="1.5"/>
+  <rect x="172" y="468" width="150" height="7" rx="3.5" class="faint"/>
+  <circle cx="788" cy="472" r="15" class="accent"/>
+  <path d="M782 472 h12 M789 467 l5 5 l-5 5" stroke="#fff" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+
+  <!-- caption ribbon: RAM story -->
+  <g transform="translate(128,384)">
+    <rect x="22" y="0" width="290" height="46" rx="10" class="bubble-in" opacity=".55"/>
+    <circle cx="46" cy="23" r="10" fill="#8e8e93" opacity=".5"/>
+    <path d="M44 18 a6 6 0 1 0 5 8 a5 5 0 0 1 -5 -8 z" fill="#fff"/>
+    <text x="66" y="20" font-family="-apple-system,Helvetica,Arial" font-size="11" font-weight="600" class="ink">2 services asleep</text>
+    <text x="66" y="35" font-family="-apple-system,Helvetica,Arial" font-size="10" class="muted">WebContent process torn down &#183; RAM reclaimed</text>
+  </g>
+</svg>
