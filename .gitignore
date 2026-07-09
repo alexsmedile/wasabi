@@ -1,0 +1,51 @@
+# Build output
+build/
+*.app
+DerivedData/
+
+# XcodeGen-generated project (regenerate with `xcodegen generate`)
+Wasabi.xcodeproj/
+
+# macOS
+.DS_Store
+
+# Logs / scratch
+*.log
+
+# Spectacular local (private) scope — keep .spectacular/ itself committed
+.spectacular.local/
+
+# Tool-generated
+.scrapekit/
+.playwright-mcp/
+
+# Agent skills — installed globally, not vendored per-repo
+.agents/
+.claude/
+
+# Design exploration — local scratch, not shipped
+Resources/concepts/
+# Inspiration / reference art (third-party stock images, other apps' icons)
+input/
+
+# Archives / backups
+_archive/
+_archived/
+_backup/
+_backups/
+# ...but keep archived planning docs version-controlled
+!.spectacular/requests/_archive/
+
+# Private planning workspace — internal specs, decisions, agent requests, sessions,
+# monetization plans, launch playbook. Kept OUT of the public repo, except two
+# example requests kept to showcase the Spectacular workflow.
+marketing/
+.spectacular/**
+!.spectacular/requests/
+!.spectacular/requests/keyboard-switching/
+!.spectacular/requests/keyboard-switching/**
+!.spectacular/requests/perf-measurement/
+!.spectacular/requests/perf-measurement/**
+
+# Local-only working files (site prototype, marketing) — not part of the public source
+_local/
