@@ -7,7 +7,7 @@ options:
 settings:
   base:
     SWIFT_VERSION: "6.0"
-    MARKETING_VERSION: "0.5.3-beta"
+    MARKETING_VERSION: "0.5.4-beta"
     CURRENT_PROJECT_VERSION: "8"
     DEVELOPMENT_TEAM: ""
     CODE_SIGN_STYLE: Automatic

@@ -10,7 +10,7 @@ One native window. Every service isolated. Inactive ones torn down to reclaim th
 
 ![License](https://img.shields.io/badge/license-PolyForm%20Noncommercial-blue)
 ![Platform](https://img.shields.io/badge/macOS-15%2B-lightgrey)
-![Version](https://img.shields.io/badge/version-0.5.3--beta-green)
+![Version](https://img.shields.io/badge/version-0.5.4--beta-green)
 ![Swift](https://img.shields.io/badge/Swift-6-orange)
 
 </div>

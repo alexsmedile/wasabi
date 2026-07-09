@@ -7,7 +7,12 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
 ## [Unreleased]
 
+## [0.5.4-beta] — 2026-07-09
+
 ### Changed
+- **Public launch — source is now open.** Wasabi's source repository is public at
+  [github.com/alexsmedile/wasabi](https://github.com/alexsmedile/wasabi), with a
+  rewritten README (UI mockup, feature overview, build-from-source instructions).
 - **License → source-available (PolyForm Noncommercial 1.0.0).** Wasabi moves from
   proprietary/all-rights-reserved to the [PolyForm Noncommercial License 1.0.0](LICENSE):
   the source is public and free to read, build, modify, and use for any noncommercial
