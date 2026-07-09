@@ -7,6 +7,13 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
 ## [Unreleased]
 
+### Added
+- **In-app update check is live.** `UpdateChecker` now reads a real manifest
+  (`latest.json` served off the public releases repo) instead of a placeholder URL.
+  On launch and via "Check for Updates…", the app compares the running build to the
+  latest release and offers a download when a newer version ships. The manifest is
+  regenerated automatically by the release pipeline, so every release is discoverable.
+
 ## [0.5.4-beta] — 2026-07-09
 
 ### Changed

@@ -13,11 +13,11 @@ final class UpdateChecker: NSObject {
     /// Shared target for the menu item's @objc selector (NSObject required).
     static let shared = UpdateChecker()
 
-    /// The manifest URL. Placeholder until the first update is hosted (own domain /
-    /// S3 / public releases repo — see PLAN). No automatic check fires while this is
-    /// a placeholder, so it can't nag against a dead URL.
-    static let feedURL = URL(string: "https://updates.wasabi.app/latest.json")
-    private static let isConfigured = feedURL?.host != "updates.wasabi.app"  // flip when real host is set
+    /// The manifest URL: a static `latest.json` served raw off the public
+    /// releases-only repo (no own domain / S3 needed — see PLAN). Regenerated on
+    /// every release by publish-release.sh.
+    static let feedURL = URL(string: "https://raw.githubusercontent.com/gin-so/wasabi-releases/main/latest.json")
+    private static let isConfigured = feedURL != nil
 
     struct Manifest: Decodable {
         let version: String
