@@ -1,8 +1,8 @@
 # Status — Wasabi
 
 **Last updated:** 2026-08-30
-**Current objective:** Publish `0.6.2-beta` build `14` through the private distribution pipeline.
-**Overall state:** Source and notarized DMG are verified; commit/tag and public artifact/manifest publication remain.
+**Current objective:** Monitor `0.6.2-beta` and prepare the next bounded release.
+**Overall state:** `0.6.2-beta` build `14` is published as a notarized public prerelease; the update manifest is live.
 
 ---
 
@@ -20,8 +20,9 @@
 
 - Marketing version: `0.6.2-beta`
 - Build: `14`
-- Planned tag: `v0.6.2-beta`
+- Tag: `v0.6.2-beta`
 - Public artifact repository: `gin-so/wasabi-releases`
+- Release: <https://github.com/gin-so/wasabi-releases/releases/tag/v0.6.2-beta>
 - Production checkout, Pro information URL, Developer ID identity, and notary profile remain vendor-only and gitignored.
 - Artifact: `build/Wasabi.dmg` · SHA-256 `d6a9a84548d47181e1e7dc39d92f5af39d9b518d2109a4b31b7bebb387f08c18`
 
@@ -40,8 +41,8 @@
 3. [x] Confirm production checkout/Pro URLs are injected and development bypass markers are absent.
 4. [x] Developer ID sign with hardened runtime and timestamp; notarize and staple the app and DMG.
 5. [x] Verify strict code signing, stapler validation, and Gatekeeper acceptance.
-6. [ ] Review the bounded staged diff and secret scan; DCO-sign the release commit and push `v0.6.2-beta`.
-7. [ ] Publish `Wasabi.dmg` to `gin-so/wasabi-releases` and update `latest.json`.
+6. [x] Review the bounded staged diff and secret scan; DCO-sign the release commit and push `v0.6.2-beta`.
+7. [x] Publish `Wasabi.dmg` to `gin-so/wasabi-releases` and update `latest.json`.
 
 ## After release
 
