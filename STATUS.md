@@ -1,8 +1,8 @@
 # Status — Wasabi
 
 **Last updated:** 2026-08-30
-**Current objective:** Monitor `0.6.2-beta` and prepare the next bounded release.
-**Overall state:** `0.6.2-beta` build `14` is published as a notarized public prerelease; the update manifest is live.
+**Current objective:** Friend-beta observation; resume only for evidence-backed fixes or the website launch pass.
+**Overall state:** `0.6.2-beta` build `14` is published as a notarized public prerelease, the update manifest is live, and the app code is frozen while these hand-off documents await review.
 
 ---
 
@@ -34,6 +34,30 @@
 - The historical graphics/process churn was not reproduced and is not conclusively root-caused.
 - There is no committed automated test target. Final confidence still depends on targeted manual coverage of session restore, sleep/wake, notifications, uploads/downloads, clipboard, media permissions, licensing, third-service switching, and updates.
 
+## Friend-beta distribution
+
+The current DMG can be shared with trusted beta testers. It is Developer ID
+signed, notarized, stapled, and accepted by Gatekeeper. Testers should download
+the artifact from the public prerelease, drag Wasabi to Applications, and run it
+on an Apple Silicon Mac with macOS 15 or later.
+
+Set expectations clearly:
+
+- This is a beta. Ask testers not to rely on it as their only path to urgent
+  messages until their preferred services are configured and understood.
+- Wasabi has no telemetry or crash-reporting backend, so useful bug reports need
+  macOS version, Mac model, service, steps, expected/actual behavior, and visual
+  evidence when possible.
+- New installs receive the seven-day Pro trial automatically, without a card.
+  Afterward, Wasabi Free remains usable for two services and preserves every
+  configured session.
+- Sleeping services cannot deliver instant notifications. Testers who need
+  immediate alerts should choose **Keep Running** for that service.
+- Share the DMG/release link, never a personal license key or vendor credential.
+
+See [`docs/RELEASING.md`](docs/RELEASING.md) for the reusable publishing and
+tester hand-off checklist.
+
 ## Release checklist
 
 1. [x] Align source metadata, README badge, changelog, docs, and agent guidance on `0.6.2-beta` build `14`.
@@ -50,3 +74,17 @@
 - Add a repeatable resource-regression harness for helper churn, idle CPU, WebContent termination, and physical footprint.
 - Replace environment-gated synchronous diagnostics with bounded Logger/signpost instrumentation.
 - Correct `scripts/measure-ram.sh` so it never equates WebContent-process count with live-service count.
+
+## Resume points
+
+- [`TODO.md`](TODO.md): prioritized next work and website-alignment requirements.
+- [`docs/RELEASING.md`](docs/RELEASING.md): friend-beta hand-off and future release procedure.
+- WIP website: `/Users/alex/work/wasabi/repos/wasabi-website` (locally aligned to
+  `0.6.2-beta`, Free/Pro, launch pricing, and notification tradeoffs; build,
+  rendered-page test, and lint pass. Its stable `/download` page and guarded
+  `/buy` Lemon Squeezy handoff work locally, and the hosted checkout secret is
+  configured. The same routes pass on the newly deployed owner-only Site at
+  <https://wasabi-macos-app.alexsmedile.chatgpt.site>. Website source is pushed
+  to `gin-so/wasabi-website` `main`. `https://wasabi.gin.so/` is attached as the
+  canonical origin but remains pending DNS/TLS validation; desktop/mobile visual
+  review and an intentional public-access decision also remain open).

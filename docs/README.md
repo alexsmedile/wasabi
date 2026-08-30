@@ -42,6 +42,10 @@ Use **Keep Running** for services that need instant notifications.
   and pull-request expectations.
 - [Release status](../STATUS.md): current verification state and remaining private
   distribution gates.
+- [Publishing and releasing](RELEASING.md): friend-beta hand-off, verification,
+  notarization, and publication checklist.
+- [Next work](../TODO.md): prioritized product hardening and website-alignment
+  tasks.
 
 ## Source and official builds
 
