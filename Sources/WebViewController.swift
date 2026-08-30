@@ -1,4 +1,5 @@
 import AppKit
+import UserNotifications
 import WebKit
 
 /// Owns exactly one WKWebView for one service.
@@ -21,6 +22,7 @@ final class WebViewController: NSObject, WKNavigationDelegate, WKUIDelegate, WKD
     private var _webView: WKWebView?
     private var didLoad = false
     private var downloads: [ObjectIdentifier: WKDownload] = [:]
+    private var downloadDestinations: [ObjectIdentifier: URL] = [:]
 
     /// Patches `window.Notification` so the page's notification permission request
     /// is answered (the crash fix) and `new Notification(...)` is forwarded to
@@ -96,9 +98,9 @@ final class WebViewController: NSObject, WKNavigationDelegate, WKUIDelegate, WKD
             initiallyVisible: desiredVisible
         )
 
-        // A WKWebView subclass that does NOT register file URLs as a drag type, so
-        // dropping a PDF/image onto the page reaches the web app's own JS drop zone
-        // instead of WebKit navigating to (and rendering) the file. See NonNavigatingWebView.
+        // Keep WebKit's file drag types intact so web apps receive DataTransfer.files.
+        // Main-frame file navigation is cancelled by the navigation delegate instead.
+        // See NonNavigatingWebView for the full drag/drop lifecycle rationale.
         let webView = NonNavigatingWebView(frame: .zero, configuration: config)
         webView.customUserAgent = UserAgent.desktopSafari   // required — see DECISIONS.md
         webView.allowsBackForwardNavigationGestures = false
@@ -210,13 +212,18 @@ final class WebViewController: NSObject, WKNavigationDelegate, WKUIDelegate, WKD
                   suggestedFilename: String,
                   completionHandler: @escaping @MainActor @Sendable (URL?) -> Void) {
         let destination = uniqueDownloadURL(for: suggestedFilename)
+        downloadDestinations[ObjectIdentifier(download)] = destination
         log("downloadDestination: \(destination.path)")
         completionHandler(destination)
     }
 
     func downloadDidFinish(_ download: WKDownload) {
-        log("downloadDidFinish")
+        let destination = downloadDestinations[ObjectIdentifier(download)]
+        log("downloadDidFinish: \(destination?.path ?? "?")")
         release(download)
+        if let url = destination {
+            revealDownload(at: url)
+        }
     }
 
     func download(_ download: WKDownload, didFailWithError error: Error, resumeData: Data?) {
@@ -260,14 +267,17 @@ final class WebViewController: NSObject, WKNavigationDelegate, WKUIDelegate, WKD
     /// WKWebView has no built-in panel; without this delegate method the input does
     /// nothing. The completion handler MUST be called exactly once (with the chosen
     /// URLs or `nil` for cancel) — failing to call it is what crashes the WebContent
-    /// process. Honors `multiple` and `accept` via the supplied parameters.
+    /// process. Honors `allowsMultipleSelection` and `allowsDirectories` via the
+    /// supplied parameters. Note: `accept` MIME/extension filtering is not exposed by
+    /// `WKOpenPanelParameters` on macOS (Apple API limitation) — the panel allows any
+    /// file type and the web app validates.
     func webView(_ webView: WKWebView,
                  runOpenPanelWith parameters: WKOpenPanelParameters,
                  initiatedByFrame frame: WKFrameInfo,
                  completionHandler: @escaping @MainActor @Sendable ([URL]?) -> Void) {
         let panel = NSOpenPanel()
         panel.canChooseFiles = true
-        panel.canChooseDirectories = false
+        panel.canChooseDirectories = parameters.allowsDirectories
         panel.allowsMultipleSelection = parameters.allowsMultipleSelection
         panel.resolvesAliases = true
 
@@ -339,7 +349,30 @@ final class WebViewController: NSObject, WKNavigationDelegate, WKUIDelegate, WKD
     }
 
     private func release(_ download: WKDownload) {
-        downloads.removeValue(forKey: ObjectIdentifier(download))
+        let id = ObjectIdentifier(download)
+        downloads.removeValue(forKey: id)
+        downloadDestinations.removeValue(forKey: id)
+    }
+
+    private func revealDownload(at url: URL) {
+        // Make the completed download discoverable: reveal in Finder and surface a
+        // lightweight system notification. Silent downloads are the #1 "it didn't work"
+        // report — users don't have Downloads open.
+        NSWorkspace.shared.activateFileViewerSelecting([url])
+        Task { @MainActor in
+            let center = UNUserNotificationCenter.current()
+            _ = try? await center.requestAuthorization(options: [.alert, .sound])
+            let content = UNMutableNotificationContent()
+            content.title = "Download complete"
+            content.body = url.lastPathComponent
+            content.sound = .default
+            let request = UNNotificationRequest(
+                identifier: UUID().uuidString,
+                content: content,
+                trigger: nil
+            )
+            try? await center.add(request)
+        }
     }
 
     private func uniqueDownloadURL(for suggestedFilename: String) -> URL {

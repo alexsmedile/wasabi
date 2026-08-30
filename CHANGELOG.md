@@ -7,6 +7,14 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
 ## [Unreleased]
 
+## [0.6.1-beta] — 2026-08-30
+
+### Fixed
+- **Silent downloads now reveal in Finder.** Completed downloads are auto-revealed in Finder (`activateFileViewerSelecting`) and, when notifications are allowed, post a "Download complete" system notification with the filename — no more "it didn't work" when Downloads isn't open. Destination is still `~/Downloads` with deduplication (`file 2.ext`).
+- **Folder upload via webkitdirectory now works.** The file picker now honors `WKOpenPanelParameters.allowsDirectories` (`canChooseDirectories`), so web apps requesting a folder (e.g. WhatsApp folder attach) can select one. Previously hard-coded to `false`.
+- **File picker comment corrected.** `accept` MIME filtering is not exposed by `WKOpenPanelParameters` on macOS (Apple API limitation) — documented explicitly instead of implying `accept` is honored.
+- **Download tracking hardened.** Destination URL is tracked per-`WKDownload` so completion can reveal the correct file; failed downloads clean up tracking correctly.
+
 ## [0.6.0-beta] — 2026-08-30
 
 ### Added
