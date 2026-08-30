@@ -39,6 +39,20 @@ have questions, open an issue first.
 ## Practical guidelines
 
 See [`AGENTS.md`](AGENTS.md) for build steps, code structure, Swift style, and
-commit/PR conventions. There is no test target — verify changes by building
-(`scripts/build-app.sh`) and exercising the affected behavior by hand, and note
-your manual verification in the PR.
+commit/PR conventions.
+
+Before opening a pull request:
+
+1. Build the development configuration:
+   `scripts/build-app.sh`
+2. Build without development-only license and preview code:
+   `WASABI_RELEASE=1 scripts/build-app.sh`
+3. Exercise the behavior you changed. WebKit-facing changes may require checking
+   session restore, sleep/wake, notifications, uploads/downloads, clipboard, or
+   camera/microphone permissions as applicable.
+4. Describe the user-visible result and manual verification in the pull request.
+5. Sign off the commit for the incorporated DCO: `git commit -s`.
+
+There is not yet a committed automated test target. Never commit license keys,
+checkout credentials, signing identities, notarization credentials, session
+data, or derived build products.

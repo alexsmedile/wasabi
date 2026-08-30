@@ -7,7 +7,7 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
 ## [Unreleased]
 
-## [0.5.5-beta] — 2026-08-27
+## [0.6.0-beta] — 2026-08-30
 
 ### Added
 - **Zero-friction 7-day Pro trial.** A fresh install opens directly into the full
@@ -19,6 +19,14 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
   the default action on the right; **Upgrade** sits on the left. The offer links to
   the Pro landing page and opens when locked Smart Sleep is selected instead of
   silently falling back.
+- **Trial expiry is explicit but non-blocking.** Wasabi shows one expiry notice,
+  confirms Wasabi Free remains available, and—when more than two services exist—states
+  that every service and session is safe. It never deletes data or repeats the
+  notice automatically.
+- **Locked features identify themselves before the click.** In Wasabi Free, the
+  service menu labels Smart Sleep as **Smart Sleep — Pro** while keeping it
+  selectable for a contextual explanation. The marker disappears during the Pro
+  trial and after activation, when the feature is already available.
 - **In-app update check is live.** `UpdateChecker` now reads a real manifest
   (`latest.json` served off the public releases repo) instead of a placeholder URL.
   On launch and via "Check for Updates…", the app compares the running build to the

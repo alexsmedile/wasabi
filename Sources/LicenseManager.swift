@@ -46,10 +46,12 @@ final class LicenseManager {
     private static let instanceIDKey = "wasabi.license.instanceID"   // LS device instance (not secret)
     private static let trialFirstLaunchKey = "wasabi.trial.firstLaunch"   // Date, stamped once
     private static let proOfferSeenKey = "wasabi.proOffer.seen"
+    private static let trialExpiryNoticeSeenKey = "wasabi.trial.expiryNoticeSeen"
 
     /// Full-unlock trial length. ponytail: local Date, not DRM.
     static let trialDays = 7
     static let automaticProOfferDelay: TimeInterval = 86_400
+    static let trialDuration: TimeInterval = Double(trialDays) * 86_400
 
     private let defaults: UserDefaults
     let backend: LicenseBackend
@@ -169,24 +171,64 @@ final class LicenseManager {
     }
 
     /// Seconds until the one-time automatic Pro offer is due. `nil` means no offer:
-    /// the user is licensed, has already seen it, or has no trial timestamp yet.
+    /// the user is licensed, has already seen it, has no trial timestamp, or the
+    /// trial already expired (the expiry notice is more relevant then).
     var timeUntilAutomaticProOffer: TimeInterval? {
         guard !isActivated,
               !defaults.bool(forKey: Self.proOfferSeenKey),
               let start = defaults.object(forKey: Self.trialFirstLaunchKey) as? Date else {
             return nil
         }
-        return Self.proOfferDelay(elapsed: Date().timeIntervalSince(start))
+        return Self.softProOfferDelay(elapsed: Date().timeIntervalSince(start))
     }
 
     static func proOfferDelay(elapsed: TimeInterval) -> TimeInterval {
         max(0, automaticProOfferDelay - max(0, elapsed))
     }
 
+    static func softProOfferDelay(elapsed: TimeInterval) -> TimeInterval? {
+        guard elapsed < trialDuration else { return nil }
+        return proOfferDelay(elapsed: elapsed)
+    }
+
     /// Any explicit or automatic visit to the Upgrade window satisfies the one-time
     /// day-one offer. Feature gates can still show Upgrade later when relevant.
     func markProOfferSeen() {
         defaults.set(true, forKey: Self.proOfferSeenKey)
+    }
+
+    /// Seconds until the one-time trial-expiry notice is due. It is independent
+    /// from the day-one soft offer so seeing one never suppresses the other.
+    var timeUntilTrialExpiryNotice: TimeInterval? {
+        guard !isActivated,
+              !defaults.bool(forKey: Self.trialExpiryNoticeSeenKey),
+              let start = defaults.object(forKey: Self.trialFirstLaunchKey) as? Date else {
+            return nil
+        }
+        return Self.trialExpiryNoticeDelay(elapsed: Date().timeIntervalSince(start))
+    }
+
+    static func trialExpiryNoticeDelay(elapsed: TimeInterval) -> TimeInterval {
+        max(0, trialDuration - max(0, elapsed))
+    }
+
+    private var trialHasExpired: Bool {
+        guard let start = defaults.object(forKey: Self.trialFirstLaunchKey) as? Date else { return false }
+        return Date().timeIntervalSince(start) >= Self.trialDuration
+    }
+
+    func markTrialExpiryNoticeSeen() {
+        defaults.set(true, forKey: Self.trialExpiryNoticeSeenKey)
+        // If the app was not opened during the trial, prevent the older day-one
+        // offer from appearing after this more relevant expiry message.
+        markProOfferSeen()
+    }
+
+    /// A contextual feature-gate Upgrade opened after expiry already communicates
+    /// the loss of Pro. Count it as the single expiry notice instead of following
+    /// it with another automatic window.
+    func markTrialExpiryNoticeSeenIfExpired() {
+        if trialHasExpired { markTrialExpiryNoticeSeen() }
     }
 
     /// The ONLY entitlement question. `trial`/`pro` unlock everything gated; `free`
@@ -339,6 +381,16 @@ final class LicenseManager {
                "day one → offer is due")
         assert(proOfferDelay(elapsed: -1) == automaticProOfferDelay,
                "clock rollback cannot make the offer immediately due")
+        assert(softProOfferDelay(elapsed: trialDuration) == nil,
+               "expired trial → skip stale day-one offer")
+        assert(trialExpiryNoticeDelay(elapsed: 0) == trialDuration,
+               "trial start → expiry notice waits seven days")
+        assert(trialExpiryNoticeDelay(elapsed: trialDuration - 1) == 1,
+               "one second before expiry → wait one second")
+        assert(trialExpiryNoticeDelay(elapsed: trialDuration) == 0,
+               "trial expiry → notice is due")
+        assert(trialExpiryNoticeDelay(elapsed: -1) == trialDuration,
+               "clock rollback cannot expire the trial")
 
         #if WASABI_DEV
         assert(StubLicenseBackend.looksValid("WASABI-AAAA-BBBB-CCCC"), "well-formed demo key accepted")

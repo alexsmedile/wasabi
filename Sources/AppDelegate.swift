@@ -6,6 +6,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var mainController: MainViewController!
     private var launchFlowCompleted = false
     private var proOfferTimer: Timer?
+    private var trialExpiryTimer: Timer?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         // Install the main menu so ⌘C/⌘V/⌘X/⌘A reach the focused WebView via the
@@ -33,6 +34,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
         showMainWindow()
         scheduleAutomaticProOffer()
+        scheduleTrialExpiryNotice()
     }
 
     private func showMainWindow() {
@@ -66,6 +68,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     func applicationDidBecomeActive(_ notification: Notification) {
         guard launchFlowCompleted else { return }
         scheduleAutomaticProOffer()
+        scheduleTrialExpiryNotice()
     }
 
     /// Show Upgrade once, after 24 hours from the original trial start. If another
@@ -87,7 +90,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 )
                 return
             }
-            LicenseWindow(mode: .upgrade(reason: "Your 7-day Pro trial is active. No card required."))
+            LicenseWindow(mode: .upgrade(.dayOne))
                 .present(onComplete: {})
             return
         }
@@ -103,6 +106,44 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     @objc private func automaticProOfferTimerFired() {
         scheduleAutomaticProOffer()
+    }
+
+    /// Show one non-blocking notice when the Pro trial expires. Wasabi Free remains
+    /// usable, every service/session stays persisted, and free-tier selection gates
+    /// continue to enforce which services can open.
+    private func scheduleTrialExpiryNotice() {
+        trialExpiryTimer?.invalidate()
+        trialExpiryTimer = nil
+        guard let delay = LicenseManager.shared.timeUntilTrialExpiryNotice else { return }
+
+        if delay <= 0 {
+            guard NSApp.isActive, !LicenseWindow.isPresenting else {
+                trialExpiryTimer = Timer.scheduledTimer(
+                    timeInterval: 60,
+                    target: self,
+                    selector: #selector(trialExpiryTimerFired),
+                    userInfo: nil,
+                    repeats: false
+                )
+                return
+            }
+            let hasLockedServices = ServiceRegistry.shared.all().count > 2
+            LicenseWindow(mode: .trialExpired(hasLockedServices: hasLockedServices))
+                .present(onComplete: {})
+            return
+        }
+
+        trialExpiryTimer = Timer.scheduledTimer(
+            timeInterval: delay,
+            target: self,
+            selector: #selector(trialExpiryTimerFired),
+            userInfo: nil,
+            repeats: false
+        )
+    }
+
+    @objc private func trialExpiryTimerFired() {
+        scheduleTrialExpiryNotice()
     }
 
     /// App menu ▸ License… — open the license window any time. `forMenu` shows the

@@ -4,9 +4,11 @@ import AppKit
 /// copy and license-key handling.
 ///
 /// - **`.activate`** — straight to the "paste your key" field.
-/// - **`.upgrade(feature:)`** — a paywall shown when a free user hits a locked
+/// - **`.upgrade(context:)`** — a paywall shown when a free user hits a locked
 ///   feature or opens License from the menu. It shows the current Pro offer and
 ///   shipped features before Buy, Trial, and Activate actions.
+/// - **`.trialExpired`** — the one-time, non-blocking expiry notice. It never
+///   deletes or mutates services; the existing free-tier gates decide availability.
 ///
 /// Modeled on `AddServiceSheet` (`retain = self` lifetime); a standalone window,
 /// not a sheet, because at launch there's no parent yet.
@@ -15,7 +17,8 @@ final class LicenseWindow: NSObject, NSTextFieldDelegate, NSWindowDelegate {
     /// What brought the window up — sets the copy and whether the paywall shows.
     enum Mode {
         case activate                 // already purchased: paste the key
-        case upgrade(reason: String)  // a gate: show the offer first, key field on demand
+        case upgrade(ProductCopy.UpgradeContext)
+        case trialExpired(hasLockedServices: Bool)
         case activated                // already Pro: show status + Deactivate, no key field
     }
 
@@ -25,7 +28,7 @@ final class LicenseWindow: NSObject, NSTextFieldDelegate, NSWindowDelegate {
     static func forMenu(manager: LicenseManager? = nil) -> LicenseWindow {
         let m = manager ?? .shared
         return LicenseWindow(
-            mode: m.tier == .pro ? .activated : .upgrade(reason: ""),
+            mode: m.tier == .pro ? .activated : .upgrade(.general),
             manager: m
         )
     }
@@ -72,7 +75,8 @@ final class LicenseWindow: NSObject, NSTextFieldDelegate, NSWindowDelegate {
         self.manager = manager ?? .shared
         let styleMask: NSWindow.StyleMask = [.titled, .closable]
         let windowSize: NSSize = switch mode {
-        case .upgrade: NSSize(width: 460, height: 260)
+        case .upgrade: NSSize(width: 460, height: 280)
+        case .trialExpired: NSSize(width: 460, height: 265)
         case .activate: NSSize(width: 440, height: 220)
         case .activated: NSSize(width: 440, height: 200)
         }
@@ -83,7 +87,11 @@ final class LicenseWindow: NSObject, NSTextFieldDelegate, NSWindowDelegate {
             defer: false
         )
         super.init()
-        window.title = if case .upgrade = mode { "Upgrade" } else { "Wasabi Pro" }
+        window.title = switch mode {
+        case .upgrade: "Upgrade"
+        case .trialExpired: "Pro Trial Ended"
+        case .activate, .activated: "Wasabi Pro"
+        }
         window.delegate = self       // drop `retain` on ANY close (✕ / close() / quit)
         // CRITICAL: a titled NSWindow defaults to isReleasedWhenClosed = true, so
         // AppKit releases the window itself during its close animation
@@ -114,8 +122,14 @@ final class LicenseWindow: NSObject, NSTextFieldDelegate, NSWindowDelegate {
         guard !isPresented else { return }
         isPresented = true
         Self.presentedCount += 1
-        if case .upgrade = mode {
+        switch mode {
+        case .upgrade:
             manager.markProOfferSeen()
+            manager.markTrialExpiryNoticeSeenIfExpired()
+        case .trialExpired:
+            manager.markTrialExpiryNoticeSeen()
+        case .activate, .activated:
+            break
         }
         self.onComplete = onComplete
         retain = self
@@ -123,7 +137,7 @@ final class LicenseWindow: NSObject, NSTextFieldDelegate, NSWindowDelegate {
         window.makeKeyAndOrderFront(nil)
         switch mode {
         case .activate: window.makeFirstResponder(keyField)
-        case .upgrade, .activated: break
+        case .upgrade, .trialExpired, .activated: break
         }
         NSApp.activate(ignoringOtherApps: true)
     }
@@ -132,9 +146,19 @@ final class LicenseWindow: NSObject, NSTextFieldDelegate, NSWindowDelegate {
         let content = NSView(frame: window.contentLayoutRect)
         window.contentView = content
 
-        buildOfferHeader()   // hidden unless .upgrade
-        buildKeyEntry()      // hidden unless .activate
-        buildActivatedPanel()// hidden unless .activated
+        // Build only panels this mode can reach. In particular, do not construct
+        // the hidden Activated panel for an offer: it asks `maskedKey` for the
+        // Keychain value and could trigger a completely unnecessary password
+        // prompt while the user is only looking at Upgrade.
+        switch mode {
+        case .activate:
+            buildKeyEntry()
+        case .upgrade, .trialExpired:
+            buildOfferHeader()
+            buildKeyEntry()  // reachable through “Already have a key?”
+        case .activated:
+            buildActivatedPanel()
+        }
 
         let stack = NSStackView(views: [offerStack, keyStack, activatedStack])
         stack.orientation = .vertical
@@ -147,6 +171,7 @@ final class LicenseWindow: NSObject, NSTextFieldDelegate, NSWindowDelegate {
             stack.leadingAnchor.constraint(equalTo: content.leadingAnchor, constant: 20),
             stack.trailingAnchor.constraint(equalTo: content.trailingAnchor, constant: -20),
             stack.topAnchor.constraint(equalTo: content.topAnchor, constant: 18),
+            stack.bottomAnchor.constraint(lessThanOrEqualTo: content.bottomAnchor, constant: -16),
             offerStack.widthAnchor.constraint(equalTo: stack.widthAnchor),
             keyStack.widthAnchor.constraint(equalTo: stack.widthAnchor),
             activatedStack.widthAnchor.constraint(equalTo: stack.widthAnchor),
@@ -158,7 +183,7 @@ final class LicenseWindow: NSObject, NSTextFieldDelegate, NSWindowDelegate {
         activatedStack.isHidden = true
         switch mode {
         case .activate:  keyStack.isHidden = false
-        case .upgrade:   offerStack.isHidden = false
+        case .upgrade, .trialExpired: offerStack.isHidden = false
         case .activated: activatedStack.isHidden = false
         }
     }
@@ -166,69 +191,148 @@ final class LicenseWindow: NSObject, NSTextFieldDelegate, NSWindowDelegate {
     // MARK: - Offer header (.upgrade)
 
     private func buildOfferHeader() {
-        let title = NSTextField(labelWithString: ProductCopy.proHeadline)
-        title.font = .boldSystemFont(ofSize: 18)
+        let titleText: String = switch mode {
+        case .upgrade(let context): context.headline
+        case .trialExpired: ProductCopy.trialEndedHeadline
+        case .activate, .activated: ""
+        }
+        let title = NSTextField(labelWithString: titleText)
+        title.font = .boldSystemFont(ofSize: isTrialExpiry ? 22 : 18)
 
         let offer = NSTextField(labelWithString: ProductCopy.launchOffer)
-        offer.font = .boldSystemFont(ofSize: 12)
+        offer.font = .boldSystemFont(ofSize: 13)
 
-        let reason: String
-        if case .upgrade(let r) = mode { reason = r } else { reason = "" }
+        let reassurance = NSTextField(labelWithString: ProductCopy.purchaseReassurance)
+        reassurance.font = .systemFont(ofSize: 11)
+        reassurance.textColor = .secondaryLabelColor
+
+        let reason: String = switch mode {
+        case .upgrade(let context): context.subtitle
+        case .trialExpired(let hasLockedServices):
+            hasLockedServices
+                ? "\(ProductCopy.trialEndedSummary)\n\n\(ProductCopy.servicesSafeNote)"
+                : ProductCopy.trialEndedSummary
+        case .activate, .activated: ""
+        }
         let body = NSTextField(wrappingLabelWithString: reason)
-        body.font = .systemFont(ofSize: 11)
-        body.textColor = .secondaryLabelColor
+        body.font = isTrialExpiry
+            ? .systemFont(ofSize: 11)
+            : .systemFont(ofSize: 14, weight: .medium)
+        body.textColor = isTrialExpiry ? .secondaryLabelColor : .labelColor
         body.isHidden = reason.isEmpty
 
-        let features = makeFeatureList()
+        let features = makeFeatureList(compact: isTrialExpiry)
 
-        buyButton.title = "Upgrade"
+        buyButton.title = "Upgrade for \(ProductCopy.launchPrice) →"
         buyButton.bezelStyle = .rounded
         buyButton.target = self
         buyButton.action = #selector(buyTapped)
         buyButton.isEnabled = (Self.checkoutURL != nil)   // no dead link
         buyButton.toolTip = Self.checkoutURL == nil ? "Checkout link not configured yet" : nil
 
-        let continueFree = NSButton(title: "Continue with Free", target: self, action: #selector(continueFreeTapped))
-        continueFree.bezelStyle = .rounded
-        continueFree.keyEquivalent = "\r"       // calm default action, on the right
+        let continueTitle = isDayOneOffer ? "Keep Using Trial" : "Continue with Free"
+        let continueFree = NSButton(title: continueTitle, target: self, action: #selector(continueFreeTapped))
 
-        let buttons = NSStackView(views: [buyButton, NSView(), continueFree])
+        // An unsolicited day-one offer stays calm: dismiss is the default. At an
+        // explicit feature gate or the one-time expiry notice, Upgrade becomes the
+        // primary action while Wasabi Free remains one click away.
+        let purchaseIsPrimary = !isDayOneOffer && Self.checkoutURL != nil
+        if purchaseIsPrimary {
+            continueFree.bezelStyle = .rounded
+            buyButton.keyEquivalent = "\r"
+        } else {
+            continueFree.bezelStyle = .rounded
+            continueFree.keyEquivalent = "\r"
+        }
+        let buttonViews: [NSView] = purchaseIsPrimary
+            ? [continueFree, NSView(), buyButton]
+            : [buyButton, NSView(), continueFree]
+        let buttons = NSStackView(views: buttonViews)
         buttons.orientation = .horizontal
         buttons.spacing = 10
 
         var linkViews: [NSView] = []
         if manager.canStartTrial {
             let trial = NSButton(title: "Try Pro Free", target: self, action: #selector(startTrialTapped))
-            trial.bezelStyle = .inline
+            styleAsTextLink(trial)
             linkViews.append(trial)
         }
         if Self.proInfoURL != nil {
             let discover = NSButton(title: "Discover Pro", target: self, action: #selector(discoverTapped))
-            discover.bezelStyle = .inline
+            styleAsTextLink(discover)
             linkViews.append(discover)
+            let separator = NSTextField(labelWithString: "·")
+            separator.font = .systemFont(ofSize: 11)
+            separator.textColor = .tertiaryLabelColor
+            linkViews.append(separator)
         }
+        let keyPrompt = NSTextField(labelWithString: "Already have a key?")
+        keyPrompt.font = .systemFont(ofSize: 11)
+        keyPrompt.textColor = .secondaryLabelColor
         let haveKey = NSButton(title: "Activate License", target: self, action: #selector(showKeyEntry))
-        haveKey.bezelStyle = .inline
-        linkViews.append(haveKey)
+        styleAsTextLink(haveKey)
+        let keyLink = NSStackView(views: [keyPrompt, haveKey])
+        keyLink.orientation = .horizontal
+        keyLink.alignment = .centerY
+        keyLink.spacing = 4
+        linkViews.append(keyLink)
         let links = NSStackView(views: linkViews)
         links.orientation = .horizontal
         links.spacing = 12
 
         offerStack.orientation = .vertical
         offerStack.alignment = .leading
-        offerStack.spacing = 9
-        offerStack.setViews([title, features, offer, body, buttons, links], in: .leading)
+        offerStack.spacing = 10
+        let views: [NSView] = isTrialExpiry
+            ? [title, offer, reassurance, features, body, buttons, links]
+            : [title, body, features, offer, reassurance, buttons, links]
+        offerStack.setViews(views, in: .leading)
 
         buttons.widthAnchor.constraint(equalTo: offerStack.widthAnchor).isActive = true
         body.widthAnchor.constraint(equalTo: offerStack.widthAnchor).isActive = true
         features.widthAnchor.constraint(equalTo: offerStack.widthAnchor).isActive = true
     }
 
-    private func makeFeatureList() -> NSTextField {
-        let text = ProductCopy.proFeatures.map { "✓  \($0)" }.joined(separator: "\n")
+    private var isTrialExpiry: Bool {
+        if case .trialExpired = mode { return true }
+        return false
+    }
+
+    private var isDayOneOffer: Bool {
+        if case .upgrade(let context) = mode { return context.isUnsolicited }
+        return false
+    }
+
+    private func styleAsTextLink(_ button: NSButton) {
+        button.isBordered = false
+        button.font = .systemFont(ofSize: 11)
+        button.contentTintColor = .linkColor
+        button.attributedTitle = NSAttributedString(
+            string: button.title,
+            attributes: [
+                .font: NSFont.systemFont(ofSize: 11),
+                .foregroundColor: NSColor.linkColor,
+                .underlineStyle: NSUnderlineStyle.single.rawValue,
+            ]
+        )
+    }
+
+    private func makeFeatureList(compact: Bool) -> NSTextField {
+        let text = compact
+            ? ProductCopy.compactProFeatures
+            : ProductCopy.proFeatures.map { "✓  \($0)" }.joined(separator: "\n")
         let label = NSTextField(wrappingLabelWithString: text)
-        label.font = .systemFont(ofSize: 12)
-        label.maximumNumberOfLines = ProductCopy.proFeatures.count
+        let paragraph = NSMutableParagraphStyle()
+        paragraph.lineSpacing = compact ? 0 : 4
+        label.attributedStringValue = NSAttributedString(
+            string: text,
+            attributes: [
+                .font: NSFont.systemFont(ofSize: 12),
+                .foregroundColor: NSColor.secondaryLabelColor,
+                .paragraphStyle: paragraph,
+            ]
+        )
+        label.maximumNumberOfLines = compact ? 1 : ProductCopy.proFeatures.count
         return label
     }
 
@@ -346,7 +450,7 @@ final class LicenseWindow: NSObject, NSTextFieldDelegate, NSWindowDelegate {
     }
 
     /// Dismiss an upgrade offer without changing entitlement or replaying the
-    /// action that required Pro. Community remains fully usable.
+    /// action that required Pro. Wasabi Free remains fully usable.
     @objc private func continueFreeTapped() {
         window.close()
     }
@@ -369,7 +473,7 @@ final class LicenseWindow: NSObject, NSTextFieldDelegate, NSWindowDelegate {
     @objc private func showPreviousPanel() {
         keyStack.isHidden = true
         switch mode {
-        case .upgrade:
+        case .upgrade, .trialExpired:
             offerStack.isHidden = false
             window.makeFirstResponder(nil)
         case .activate, .activated:

@@ -357,8 +357,16 @@ final class MainViewController: NSViewController, NSMenuDelegate {
         [
             ("Keep running", .keepRunning),
             ("Sleep after 5 min", .sleepAfterDefault),
-            ("Smart sleep", .smartSleep),
+            ("Smart Sleep", .smartSleep),
         ]
+    }
+
+    /// Advertise the lock only when it is real. Trial and Pro users already have
+    /// Smart Sleep, so a Pro badge there would be visual noise and imply a second
+    /// purchase. Free users see the marker before clicking; the item stays enabled
+    /// so selecting it can explain the feature and offer Upgrade.
+    private var smartSleepMenuTitle: String {
+        LicenseManager.shared.isUnlocked(.smartSleep) ? "Smart Sleep" : "Smart Sleep — Pro"
     }
 
     private enum ServiceMenuTag {
@@ -408,11 +416,12 @@ final class MainViewController: NSViewController, NSMenuDelegate {
         let policySymbol: [String: String] = [
             "Keep running": "bolt.fill",
             "Sleep after 5 min": "moon",
-            "Smart sleep": "moon.stars",
+            "Smart Sleep": "moon.stars",
         ]
         let current = pool.policy(for: serviceID)
         for choice in policyChoices {
-            let item = NSMenuItem(title: choice.title,
+            let title = choice.policy == .smartSleep ? smartSleepMenuTitle : choice.title
+            let item = NSMenuItem(title: title,
                                   action: #selector(policyItemSelected(_:)),
                                   keyEquivalent: "")
             item.target = self
@@ -455,6 +464,9 @@ final class MainViewController: NSViewController, NSMenuDelegate {
         // "Sleep now" only applies to an inactive, still-awake service.
         menu.item(withTag: ServiceMenuTag.sleepNow)?.isEnabled =
             (serviceID != activeID) && controller.isAwake
+        // Tier can change while the app is open (trial expiry or activation), so
+        // refresh the label every time rather than freezing it when the menu was built.
+        menu.item(withTag: policyTag(.smartSleep))?.title = smartSleepMenuTitle
     }
 
     @objc private func sleepNowSelected(_ sender: NSMenuItem) {
@@ -488,7 +500,7 @@ final class MainViewController: NSViewController, NSMenuDelegate {
 
         if chosen == .smartSleep,
            !LicenseManager.shared.isUnlocked(.smartSleep) {
-            promptUpgrade(reason: "Smart Sleep is a Pro feature.") { [weak self] in
+            promptUpgrade(context: .smartSleep) { [weak self] in
                 self?.pool.setPolicy(chosen, for: serviceID)
             }
             return
@@ -623,9 +635,9 @@ final class MainViewController: NSViewController, NSMenuDelegate {
     /// Show the paywall (LicenseWindow in `.upgrade` mode: limit message + Buy /
     /// Activate). On a successful activation the caller's follow-up runs, so the
     /// just-blocked action completes now that the tier is `.pro`.
-    private func promptUpgrade(reason: String = ProductCopy.serviceLimitReason,
+    private func promptUpgrade(context: ProductCopy.UpgradeContext = .serviceLimit,
                               then onActivated: @escaping () -> Void = {}) {
-        LicenseWindow(mode: .upgrade(reason: reason)).present(onComplete: onActivated)
+        LicenseWindow(mode: .upgrade(context)).present(onComplete: onActivated)
     }
 
     // MARK: - Add service
@@ -821,7 +833,7 @@ final class MainViewController: NSViewController, NSMenuDelegate {
         // first drag attempt. Checked every state so a policy flip mid-gesture can't
         // slip a .changed/.ended through.
         if !LicenseManager.shared.isUnlocked(.reorderServices) {
-            if gesture.state == .began { promptUpgrade(reason: "Drag to reorder is a Pro feature.") }
+            if gesture.state == .began { promptUpgrade(context: .reorder) }
             return
         }
 

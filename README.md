@@ -8,9 +8,9 @@
 
 One native window. Every service isolated. Inactive ones torn down to reclaim their RAM.
 
-![License](https://img.shields.io/badge/license-PolyForm%20Noncommercial-blue)
+[![License](https://img.shields.io/badge/license-PolyForm%20Noncommercial-blue)](LICENSE)
 ![Platform](https://img.shields.io/badge/macOS-15%2B-lightgrey)
-![Version](https://img.shields.io/badge/version-0.5.5--beta-green)
+![Version](https://img.shields.io/badge/version-0.6.0--beta-green)
 ![Swift](https://img.shields.io/badge/Swift-6-orange)
 
 </div>
@@ -64,21 +64,23 @@ RAM, that's the whole point of Wasabi.
 | **Dynamic Dock icon** | Generated from your active services' favicons. |
 | **In-app update check** | A lightweight check offers a download when a newer version ships. No embedded update framework. |
 
-## Community and Pro
+## Free and Pro
 
 Wasabi uses one app and a simple feature unlock. New users start with **Pro free
-for 7 days**, automatically—no account or card required. After the trial, Wasabi
-Community remains free for up to two services.
+for 7 days**, automatically—no account or card required. After the trial,
+**Wasabi Free remains available for up to two services.** Sessions and settings
+stay safe; nothing is deleted when the trial ends.
 
-| Community | Pro |
+| Wasabi Free | Wasabi Pro |
 |---|---|
 | Up to 2 services | Unlimited services |
 | Keep running, Sleep after 5 min, and Sleep now | Smart Sleep with adaptive background sync |
 | Add, edit, and remove services | Drag to reorder services |
-| Sessions, notifications, uploads, clipboard, camera, and microphone | Everything in Community |
+| Sessions, notifications, uploads, clipboard, camera, and microphone | Everything in Wasabi Free |
 
-**Limited-time launch offer: Wasabi Pro — €9.90 / $9.90.** Unlimited services,
-Smart Sleep, and custom organization. One-time purchase.
+**Limited-time launch offer: Wasabi Pro — €9.90 in Europe or US$9.90 in the
+United States.** Unlimited services, Smart Sleep, and custom organization.
+One-time purchase; no subscription.
 
 ## Install
 
@@ -129,17 +131,17 @@ menu, license activation, upload, notifications, sleep/wake).
 ## How it works
 
 **Sleep is the RAM lever.** One service is always live (the active one). The rest
-follow their per-service policy via timers. When a service sleeps, its
-`WKWebView` is torn down and the WebContent process exits — the only way to
-actually reclaim per-service memory. Waking rebuilds it from the persistent data
-store, so you stay logged in. Smart Sleep keeps a service warm for a short grace
-period after you switch away (so flicking between chats doesn't pay a cold
-reload), and the grace shortens once you leave Wasabi for another app.
+follow their per-service policy. When a service sleeps, its `WKWebView` is torn
+down so WebKit can release its content resources. Waking rebuilds it from the
+persistent data store, so you stay logged in. Smart Sleep periodically performs
+a short, bounded background wake while Wasabi is active, using a 5/15/60-minute
+idle cadence, then sleeps the service again. This balances message freshness with
+memory savings; it does not promise that every wake will be instant.
 
 **Isolation lives in the data store, not the process.** Every service is keyed to
-a stable `WKWebsiteDataStore(forIdentifier:)`, so sessions never cross — even
-though all WebViews share one WebKit process pool so memory is coordinated across
-them.
+a stable `WKWebsiteDataStore(forIdentifier:)`, so cookies and sessions do not
+cross. WebKit remains responsible for allocating and reusing its helper processes;
+their count is not a reliable count of live services.
 
 ## Requirements
 
@@ -166,6 +168,9 @@ noncommercial purpose; commercial use requires a separate license. The paid,
 notarized, auto-updating build and Pro features are distributed only by the
 author. Wasabi hosts third-party web services (WhatsApp, Telegram, …) governed
 by their own terms; this license covers the Wasabi app only.
+
+**Documentation:** see [`docs/README.md`](docs/README.md) for the product,
+development, privacy, licensing, and release-document index.
 
 **Contributing:** see [`CONTRIBUTING.md`](CONTRIBUTING.md) for the contributor
 terms (DCO + commercial-rights grant that keeps the dual-license model viable),
