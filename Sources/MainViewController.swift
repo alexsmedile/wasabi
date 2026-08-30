@@ -428,6 +428,7 @@ final class MainViewController: NSViewController, NSMenuDelegate {
             item.representedObject = serviceID
             item.tag = policyTag(choice.policy)
             item.state = (sameKind(choice.policy, current)) ? .on : .off
+            item.toolTip = policyTooltip(choice.policy)
             item.setSymbol(policySymbol[choice.title])
             menu.addItem(item)
         }
@@ -492,6 +493,17 @@ final class MainViewController: NSViewController, NSMenuDelegate {
 
     private func sameKind(_ a: SleepPolicy, _ b: SleepPolicy) -> Bool {
         policyTag(a) == policyTag(b)
+    }
+
+    private func policyTooltip(_ policy: SleepPolicy) -> String {
+        switch policy {
+        case .keepRunning:
+            "Instant notifications; uses more memory."
+        case .autoSleepTimer:
+            "Notifications pause when the service sleeps."
+        case .smartSleep:
+            "Checks every 5–60 min while Wasabi is active; saves memory."
+        }
     }
 
     @objc private func policyItemSelected(_ sender: NSMenuItem) {
@@ -800,6 +812,7 @@ final class MainViewController: NSViewController, NSMenuDelegate {
                 sidebar.insertArrangedSubview(button, at: index)
             }
         }
+        updateSelectionHighlight()
 
         // Reorder the sidebar to match the registry order (the "+" stays last).
         for (index, service) in updated.enumerated() {
@@ -1188,6 +1201,21 @@ final class MainViewController: NSViewController, NSMenuDelegate {
             // Dim asleep services; the active one is always live.
             let awake = active || (controllers[id]?.isAwake ?? false)
             button.alphaValue = awake ? 1.0 : Self.asleepAlpha
+            button.toolTip = serviceTooltip(for: id, awake: awake)
+        }
+    }
+
+    private func serviceTooltip(for id: String, awake: Bool) -> String {
+        let name = controllers[id]?.service.name ?? "Service"
+        guard !awake else { return name }
+
+        switch pool.policy(for: id) {
+        case .smartSleep:
+            return "\(name) — Asleep. Checks every 5–60 min while Wasabi is active. Right-click → Keep Running for instant notifications."
+        case .autoSleepTimer:
+            return "\(name) — Asleep. Notifications are paused. Right-click → Keep Running for instant notifications."
+        case .keepRunning:
+            return "\(name) — Asleep. Select it to wake; Keep Running resumes afterward."
         }
     }
 }

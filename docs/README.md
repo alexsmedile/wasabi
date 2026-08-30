@@ -1,10 +1,10 @@
 # Wasabi documentation
 
 Wasabi is a native macOS WebKit wrapper that keeps chat services isolated and
-can tear down inactive views to reclaim memory. Version `0.6.0-beta` introduces
-the Wasabi Free/Pro product model, a seven-day Pro trial, contextual upgrade
-screens, bounded Smart Sleep background wakes, and hardened WebKit lifecycle
-handling.
+can tear down inactive views to reclaim memory. Version `0.6.2-beta` includes
+the Wasabi Free/Pro model, a seven-day Pro trial, contextual upgrade screens,
+bounded Smart Sleep refreshes, reliable picker/download handling, and clearer
+notification-versus-memory controls.
 
 ## Product model
 
@@ -15,7 +15,7 @@ usable for two services and preserves every configured service and session.
 | Wasabi Free | Wasabi Pro |
 |---|---|
 | Up to two services | Unlimited services |
-| Keep Running, Sleep after 5 minutes, and Sleep Now | Smart Sleep |
+| Keep Running, Sleep after 5 minutes, and Sleep Now | Smart Sleep with periodic refresh while Wasabi is active |
 | Add, edit, and remove services | Drag to reorder |
 | Sessions, notifications, uploads, clipboard, camera, and microphone | Everything in Wasabi Free |
 
@@ -24,6 +24,12 @@ Wasabi shows two unsolicited commercial messages at most: one soft offer after
 after the user explicitly selects a locked feature. Pro labels are shown only
 while a feature is locked in Wasabi Free; they are hidden during the trial and
 after activation.
+
+## Notifications and sleep
+
+Wasabi never uses push servers; notifications come from each running web app.
+Smart Sleep saves RAM but checks only every 5–60 minutes while Wasabi is active.
+Use **Keep Running** for services that need instant notifications.
 
 ## Documentation index
 

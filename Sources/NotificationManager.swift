@@ -31,11 +31,17 @@ final class NotificationManager: NSObject {
     private var authorized = false
     private var didRequest = false
 
-    /// Dedup ledger: maps a notification's dedup key to the time it was last
-    /// posted. WhatsApp Web re-fires notifications on reload/reconnect and during
-    /// smart-sleep wake windows; without this the same message banners twice.
-    /// Keyed on service + JS `tag` (or service + content when no tag is given).
-    private var recentlyPosted: [String: Date] = [:]
+    private struct DedupKey: Hashable {
+        let serviceID: String
+        let tag: String
+        let title: String
+        let body: String
+    }
+
+    /// Dedup ledger: maps a notification's identity to the time it was last posted.
+    /// Include content even when a web app supplies a reusable chat-level `tag`, so
+    /// two different messages in the same conversation are never collapsed.
+    private var recentlyPosted: [DedupKey: Date] = [:]
     /// A repeat of the same key within this window is treated as a duplicate.
     private let dedupWindow: TimeInterval = 30
 
@@ -67,14 +73,14 @@ final class NotificationManager: NSObject {
         // Belt-and-suspenders: ensure we've at least asked before posting.
         requestAuthorizationIfNeeded()
 
-        // Dedup: drop a repeat of the same notification within the window. A `tag`
-        // is the page's own identity for "this is the same notification"; without
-        // one, fall back to the content so reload re-fires don't double-banner.
-        let key = "\(serviceID)|\(tag.isEmpty ? "\(title)\u{1}\(body)" : tag)"
+        // Drop only an exact repeat within the window. Some web apps reuse one
+        // notification tag for an entire chat, so tag alone would lose distinct
+        // messages arriving close together.
+        let key = DedupKey(serviceID: serviceID, tag: tag, title: title, body: body)
         let now = Date()
         pruneDedupLedger(now: now)
         if let last = recentlyPosted[key], now.timeIntervalSince(last) < dedupWindow {
-            log("deduped \(serviceID) notification (key=\(key))")
+            log("deduped exact \(serviceID) notification")
             return
         }
         recentlyPosted[key] = now

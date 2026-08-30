@@ -28,7 +28,7 @@ enum ProductCopy {
             case .general: "Wasabi is free for 2 services."
             case .dayOne: "Your 7-day trial is active. No card required."
             case .serviceLimit: "Wasabi Free includes 2 services. Pro removes the limit."
-            case .smartSleep: "Smart Sleep wakes this periodically so messages are already here."
+            case .smartSleep: "Smart Sleep checks every 5–60 min while you use Wasabi, then sleeps to save RAM."
             case .reorder: "Drag to organize — keep your daily order at your fingertips."
             }
         }
@@ -48,7 +48,7 @@ enum ProductCopy {
     /// placeholder in LicenseManager, but are intentionally absent until the UI exists.
     static let proFeatures = [
         "Unlimited services — WhatsApp, Telegram, Slack, as many as you need",
-        "Smart Sleep — balances background freshness with memory savings",
+        "Smart Sleep — periodic refresh while using Wasabi, less RAM",
         "Drag to reorder — keep your daily order",
     ]
     static let compactProFeatures = "✓ Unlimited services    ✓ Smart Sleep    ✓ Drag to reorder"

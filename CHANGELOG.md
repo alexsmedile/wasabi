@@ -7,6 +7,15 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
 ## [Unreleased]
 
+## [0.6.2-beta] — 2026-08-30
+
+### Fixed
+- **Distinct messages are no longer mistaken for duplicates.** Notification deduplication now uses service, web notification tag, title, and body together. Web apps may reuse one tag for an entire chat; tag-only deduplication could previously hide a different message arriving within 30 seconds.
+
+### Changed
+- **Notification and sleep tradeoffs are explicit.** Service tooltips, policy-menu help, Pro messaging, and documentation now explain that Keep Running provides instant notifications with higher memory use, Smart Sleep refreshes every 5–60 minutes only while Wasabi is active, and sleeping services cannot notify.
+- **Public beta rollup.** This release includes the previously tagged but unpublished `0.6.0-beta` and untagged `0.6.1-beta` work: the Wasabi Free/Pro trial and contextual upgrade flow, bounded Smart Sleep lifecycle hardening, live update checks, folder uploads, and visible Finder-backed downloads.
+
 ## [0.6.1-beta] — 2026-08-30
 
 ### Fixed

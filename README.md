@@ -10,7 +10,7 @@ One native window. Every service isolated. Inactive ones torn down to reclaim th
 
 [![License](https://img.shields.io/badge/license-PolyForm%20Noncommercial-blue)](LICENSE)
 ![Platform](https://img.shields.io/badge/macOS-15%2B-lightgrey)
-![Version](https://img.shields.io/badge/version-0.6.0--beta-green)
+![Version](https://img.shields.io/badge/version-0.6.2--beta-green)
 ![Swift](https://img.shields.io/badge/Swift-6-orange)
 
 </div>
@@ -57,7 +57,7 @@ RAM, that's the whole point of Wasabi.
 |---|---|
 | **WhatsApp + Telegram on first launch** | Each in its own isolated `WKWebView`; click a sidebar icon to switch. |
 | **Add any service by URL** | The "+" takes a URL (`app.slack.com` works) and a name. Rename, re-URL, remove, or drag to reorder. Built-ins are just the seed — your list is the source of truth. |
-| **Per-service sleep policy** | Right-click an icon: *keep running* / *sleep after 5 min* / *smart adaptive*. A slept service exits its content process and reloads on wake — no re-login. |
+| **Per-service sleep policy** | Right-click an icon: *Keep Running* for instant notifications, *Sleep after 5 min* to pause them when asleep, or *Smart Sleep* for periodic refresh with lower RAM. |
 | **Isolated persistent sessions** | Each service has its own `WKWebsiteDataStore`, so logins survive relaunch and never cross between services. Removing one deletes its store cleanly. |
 | **Native notifications** | Banners + sound, grouped per service, click-to-activate — bridged into `UNUserNotificationCenter`. A slept service raises none. |
 | **Resizable native sidebar** | Wide / Medium / Compact (remembered). Wide is a full-height source-list layout; asleep services dim to show reclaimed RAM. |
@@ -74,7 +74,7 @@ stay safe; nothing is deleted when the trial ends.
 | Wasabi Free | Wasabi Pro |
 |---|---|
 | Up to 2 services | Unlimited services |
-| Keep running, Sleep after 5 min, and Sleep now | Smart Sleep with adaptive background sync |
+| Keep Running, Sleep after 5 min, and Sleep Now | Smart Sleep with periodic refresh while Wasabi is active |
 | Add, edit, and remove services | Drag to reorder services |
 | Sessions, notifications, uploads, clipboard, camera, and microphone | Everything in Wasabi Free |
 
@@ -136,7 +136,12 @@ down so WebKit can release its content resources. Waking rebuilds it from the
 persistent data store, so you stay logged in. Smart Sleep periodically performs
 a short, bounded background wake while Wasabi is active, using a 5/15/60-minute
 idle cadence, then sleeps the service again. This balances message freshness with
-memory savings; it does not promise that every wake will be instant.
+memory savings; it does not provide real-time notifications.
+
+**Notifications follow the sleep policy.** Wasabi never uses push servers:
+notifications come from each running web app. Smart Sleep checks every 5–60
+minutes while Wasabi is active. For instant notifications from a service, set it
+to **Keep Running**; when no WebView is running, no notification can arrive.
 
 **Isolation lives in the data store, not the process.** Every service is keyed to
 a stable `WKWebsiteDataStore(forIdentifier:)`, so cookies and sessions do not
