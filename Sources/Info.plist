@@ -24,11 +24,15 @@
 	<string>public.app-category.social-networking</string>
 	<key>LSMinimumSystemVersion</key>
 	<string>15.0</string>
-	<key>NSHumanReadableCopyright</key>
-	<string></string>
-	<key>NSMicrophoneUsageDescription</key>
-	<string>Wasabi needs microphone access so web apps (e.g. voice messages, calls) can use it.</string>
 	<key>NSCameraUsageDescription</key>
 	<string>Wasabi needs camera access so web apps (e.g. video calls) can use it.</string>
+	<key>NSHumanReadableCopyright</key>
+	<string>© 2026 Alessandro Smedile</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Wasabi needs microphone access so web apps (e.g. voice messages, calls) can use it.</string>
+	<key>WASABICheckoutURL</key>
+	<string>$(WASABI_CHECKOUT_URL)</string>
+	<key>WASABIProInfoURL</key>
+	<string>$(WASABI_PRO_INFO_URL)</string>
 </dict>
 </plist>

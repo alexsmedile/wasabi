@@ -9,6 +9,7 @@ import AppKit
 /// (`copy:`, `paste:`, …) that travels down the responder chain to the focused
 /// WKWebView. So the menu *is* the keyboard wiring — without it, only WebKit's
 /// own right-click context menu can copy/paste.
+@MainActor
 enum MainMenu {
     static func build() -> NSMenu {
         let mainMenu = NSMenu()

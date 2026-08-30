@@ -50,6 +50,7 @@ final class MainViewController: NSViewController, NSMenuDelegate {
             self?.pruneSleptWebViews()
             self?.updateSelectionHighlight()
         }
+        observeAppVisibility()
         activeID = services.first?.id ?? ""
 
         // Re-sync the sidebar/pool when the registry changes (add/remove/reorder/
@@ -100,11 +101,32 @@ final class MainViewController: NSViewController, NSMenuDelegate {
         let nc = NotificationCenter.default
         for name in [NSWindow.didEnterFullScreenNotification, NSWindow.didExitFullScreenNotification] {
             nc.addObserver(forName: name, object: window, queue: .main) { [weak self] _ in
-                self?.updateSidebarTopInset()
+                MainActor.assumeIsolated {
+                    self?.updateSidebarTopInset()
+                }
             }
         }
     }
     private var registeredFullScreenObservers = false
+
+    /// A selected service is page-visible only while Wasabi itself is active.
+    /// The injected visibility shim otherwise overrides WebKit's native occlusion
+    /// state, so failing to propagate app focus keeps page timers and animation
+    /// running at foreground cadence after the user switches to another app.
+    private func observeAppVisibility() {
+        let nc = NotificationCenter.default
+        for name in [NSApplication.didBecomeActiveNotification, NSApplication.didResignActiveNotification] {
+            nc.addObserver(forName: name, object: nil, queue: .main) { [weak self] _ in
+                MainActor.assumeIsolated { self?.refreshPageVisibility() }
+            }
+        }
+    }
+
+    private func refreshPageVisibility() {
+        for (id, controller) in controllers {
+            controller.setVisible(NSApp.isActive && id == activeID)
+        }
+    }
 
     // MARK: - App icon style (static wasabi vs dynamic favicon grid)
 
@@ -463,6 +485,15 @@ final class MainViewController: NSViewController, NSMenuDelegate {
     @objc private func policyItemSelected(_ sender: NSMenuItem) {
         guard let serviceID = sender.representedObject as? String else { return }
         let chosen = policyChoices.first { policyTag($0.policy) == sender.tag }?.policy ?? .keepRunning
+
+        if chosen == .smartSleep,
+           !LicenseManager.shared.isUnlocked(.smartSleep) {
+            promptUpgrade(reason: "Smart Sleep is a Pro feature.") { [weak self] in
+                self?.pool.setPolicy(chosen, for: serviceID)
+            }
+            return
+        }
+
         pool.setPolicy(chosen, for: serviceID)
         // Refresh checkmarks within this menu.
         sender.menu?.items.forEach { $0.state = ($0.tag == sender.tag) ? .on : .off }
@@ -592,9 +623,9 @@ final class MainViewController: NSViewController, NSMenuDelegate {
     /// Show the paywall (LicenseWindow in `.upgrade` mode: limit message + Buy /
     /// Activate). On a successful activation the caller's follow-up runs, so the
     /// just-blocked action completes now that the tier is `.pro`.
-    private func promptUpgrade(reason: String = "Wasabi Free includes 2 services. Unlock unlimited services, Smart Sleep, drag-to-reorder and custom icons with Wasabi Pro.",
+    private func promptUpgrade(reason: String = ProductCopy.serviceLimitReason,
                               then onActivated: @escaping () -> Void = {}) {
-        LicenseWindow(mode: .upgrade(reason: reason)).present(onActivated: onActivated)
+        LicenseWindow(mode: .upgrade(reason: reason)).present(onComplete: onActivated)
     }
 
     // MARK: - Add service
@@ -790,7 +821,7 @@ final class MainViewController: NSViewController, NSMenuDelegate {
         // first drag attempt. Checked every state so a policy flip mid-gesture can't
         // slip a .changed/.ended through.
         if !LicenseManager.shared.isUnlocked(.reorderServices) {
-            if gesture.state == .began { promptUpgrade() }
+            if gesture.state == .began { promptUpgrade(reason: "Drag to reorder is a Pro feature.") }
             return
         }
 
@@ -902,6 +933,10 @@ final class MainViewController: NSViewController, NSMenuDelegate {
         }
 
         activeID = serviceID
+        // Set the controller's desired visibility before a slept WebView is
+        // rebuilt below, so its document-start shim receives the correct initial
+        // state even when Wasabi is still activating.
+        refreshPageVisibility()
 
         // Read *before* setActive wakes the service (which clears the flag on the
         // rebuilt controller). A slept service reloads cold — cover the blank
@@ -924,7 +959,10 @@ final class MainViewController: NSViewController, NSMenuDelegate {
             showWakeOverlay()
             // Fade out once the reloaded page paints. Assigned per-select so it
             // targets the currently-woken controller.
-            controller.onDidFinish = { [weak self] in self?.hideWakeOverlay() }
+            controller.onDidFinish = { [weak self, weak controller] in
+                guard let self, let controller, self.activeID == controller.service.id else { return }
+                self.hideWakeOverlay()
+            }
         }
 
         // Show the active WebView, and remove all other WebViews from the view
@@ -944,14 +982,12 @@ final class MainViewController: NSViewController, NSMenuDelegate {
             }
         }
 
-        // `isHidden` does NOT make WebKit throttle a hidden-but-mounted WebView —
-        // its timers/rAF keep running. Drive the Page Visibility API instead so
-        // each inactive service reports `document.hidden` and backs off on its
-        // own (the standards-defined "you're backgrounded" signal), while staying
-        // mounted for instant switch-back. The active one is marked visible.
-        for (id, ctrl) in controllers {
-            ctrl.setVisible(id == serviceID)
-        }
+        // Removing a WebView from its superview does not reliably throttle its
+        // timers/rAF. Drive the Page Visibility API too, so every inactive service
+        // receives the standards-defined background signal while its controller
+        // retains the WebView for instant switch-back. A selected service is visible
+        // only while Wasabi itself is active; app deactivation hides every page.
+        refreshPageVisibility()
 
         controller.loadIfNeeded()
         updateSelectionHighlight()
@@ -1115,8 +1151,10 @@ final class MainViewController: NSViewController, NSMenuDelegate {
             ctx.duration = 0.35
             overlay.animator().alphaValue = 0
         } completionHandler: { [weak self, weak overlay] in
-            overlay?.isHidden = true
-            self?.wakeSpinner?.stopAnimation(nil)   // don't spin an unseen indicator
+            MainActor.assumeIsolated {
+                overlay?.isHidden = true
+                self?.wakeSpinner?.stopAnimation(nil)   // don't spin an unseen indicator
+            }
         }
     }
 

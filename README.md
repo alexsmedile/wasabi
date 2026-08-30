@@ -10,7 +10,7 @@ One native window. Every service isolated. Inactive ones torn down to reclaim th
 
 ![License](https://img.shields.io/badge/license-PolyForm%20Noncommercial-blue)
 ![Platform](https://img.shields.io/badge/macOS-15%2B-lightgrey)
-![Version](https://img.shields.io/badge/version-0.5.4--beta-green)
+![Version](https://img.shields.io/badge/version-0.5.5--beta-green)
 ![Swift](https://img.shields.io/badge/Swift-6-orange)
 
 </div>
@@ -64,6 +64,22 @@ RAM, that's the whole point of Wasabi.
 | **Dynamic Dock icon** | Generated from your active services' favicons. |
 | **In-app update check** | A lightweight check offers a download when a newer version ships. No embedded update framework. |
 
+## Community and Pro
+
+Wasabi uses one app and a simple feature unlock. New users start with **Pro free
+for 7 days**, automatically—no account or card required. After the trial, Wasabi
+Community remains free for up to two services.
+
+| Community | Pro |
+|---|---|
+| Up to 2 services | Unlimited services |
+| Keep running, Sleep after 5 min, and Sleep now | Smart Sleep with adaptive background sync |
+| Add, edit, and remove services | Drag to reorder services |
+| Sessions, notifications, uploads, clipboard, camera, and microphone | Everything in Community |
+
+**Limited-time launch offer: Wasabi Pro — €9.90 / $9.90.** Unlimited services,
+Smart Sleep, and custom organization. One-time purchase.
+
 ## Install
 
 Wasabi ships as a **notarized, Developer ID-signed DMG** — open it, drag Wasabi
@@ -83,6 +99,20 @@ scripts/build-app.sh           # compile Sources/ with swiftc → build/Wasabi.a
 open build/Wasabi.app
 ```
 
+By default, `build-app.sh` creates a **development build**. Its license backend
+is an offline stub that accepts demo keys only, in the form
+`WASABI-ABCD-1234-XYZ9`; real Lemon Squeezy keys will be rejected. To test the
+real Lemon Squeezy activation flow, build in release mode:
+
+```sh
+WASABI_RELEASE=1 scripts/build-app.sh
+open build/Wasabi.app
+```
+
+This build uses the Lemon Squeezy License API and accepts UUID-shaped Lemon
+Squeezy keys. It contains no store API secret; the user’s license key is sent
+directly to Lemon Squeezy for activation and validation.
+
 | Script | Purpose |
 |--------|---------|
 | `scripts/build-app.sh` | Compile + assemble + locally sign `build/Wasabi.app`. |
@@ -90,9 +120,11 @@ open build/Wasabi.app
 | `scripts/make-icns.sh` | Regenerate `Resources/AppIcon.icns`. |
 | `scripts/measure-ram.sh` | Measure the real per-process memory footprint (the headline benchmark). |
 
-A source build is unsigned and does not auto-update; Pro features are locked.
-There is no automated test target — verify changes by building and exercising the
-affected behavior (webview, menu, upload, notifications, sleep/wake).
+A source build does not auto-update. Development builds use the demo license
+stub; release-mode source builds use Lemon Squeezy, but still use local signing
+and are not the notarized distribution build. There is no automated test target
+— verify changes by building and exercising the affected behavior (webview,
+menu, license activation, upload, notifications, sleep/wake).
 
 ## How it works
 

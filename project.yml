@@ -7,8 +7,8 @@ options:
 settings:
   base:
     SWIFT_VERSION: "6.0"
-    MARKETING_VERSION: "0.5.4-beta"
-    CURRENT_PROJECT_VERSION: "8"
+    MARKETING_VERSION: "0.5.5-beta"
+    CURRENT_PROJECT_VERSION: "11"
     DEVELOPMENT_TEAM: ""
     CODE_SIGN_STYLE: Automatic
     CODE_SIGN_IDENTITY: "-"
@@ -19,6 +19,8 @@ targets:
     platform: macOS
     sources:
       - path: Sources
+        excludes:
+          - _swiftui_deferred
     info:
       path: Sources/Info.plist
       properties:
@@ -27,7 +29,11 @@ targets:
         CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
         LSMinimumSystemVersion: "15.0"
         NSHumanReadableCopyright: "© 2026 Alessandro Smedile"
+        NSMicrophoneUsageDescription: "Wasabi needs microphone access so web apps (e.g. voice messages, calls) can use it."
+        NSCameraUsageDescription: "Wasabi needs camera access so web apps (e.g. video calls) can use it."
         LSApplicationCategoryType: public.app-category.social-networking
+        WASABICheckoutURL: "$(WASABI_CHECKOUT_URL)"
+        WASABIProInfoURL: "$(WASABI_PRO_INFO_URL)"
     entitlements:
       path: Sources/Wasabi.entitlements
       properties:

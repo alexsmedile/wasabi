@@ -7,12 +7,39 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
 ## [Unreleased]
 
+## [0.5.5-beta] — 2026-08-27
+
 ### Added
+- **Zero-friction 7-day Pro trial.** A fresh install opens directly into the full
+  app with Pro enabled—no onboarding decision, account, or credit card. The compact
+  Upgrade offer appears once after 24 hours, after the user has tried the product.
+- **The Pro offer now explains what is unlocked.** Upgrade and License windows show
+  the launch price, one-time-purchase wording, and the shipped Pro features:
+  unlimited services, Smart Sleep, and drag-to-reorder. **Continue with Free** is
+  the default action on the right; **Upgrade** sits on the left. The offer links to
+  the Pro landing page and opens when locked Smart Sleep is selected instead of
+  silently falling back.
 - **In-app update check is live.** `UpdateChecker` now reads a real manifest
   (`latest.json` served off the public releases repo) instead of a placeholder URL.
   On launch and via "Check for Updates…", the app compares the running build to the
   latest release and offers a download when a newer version ships. The manifest is
   regenerated automatically by the release pipeline, so every release is discoverable.
+
+### Changed
+- **Smart Sleep now favors sustained low resource use.** Offscreen sync wakes run only
+  while Wasabi is active, use a 5/15/60-minute idle cadence, wait for navigation to
+  finish before the 8-second sync window, and exponentially back off failed loads.
+- **CLI builds now enforce Swift 6.** The local/release build uses the same Swift 6
+  language mode as Xcode and treats compiler warnings as errors, preventing the two
+  build paths from silently accepting different concurrency behavior.
+
+### Fixed
+- **Background pages no longer report themselves visible.** Wasabi now propagates app
+  activation to every Page Visibility shim and creates offscreen Smart-Sleep pages
+  hidden from document start, reducing unnecessary timers, animation, and rendering.
+- **Failed WebContent loads cannot become an unbounded retry loop.** Background wakes
+  time out after 30 seconds and stop after three consecutive failures; WebContent
+  process termination is recorded without immediately auto-reloading the service.
 
 ## [0.5.4-beta] — 2026-07-09
 

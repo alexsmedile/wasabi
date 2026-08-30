@@ -30,9 +30,9 @@ final class VisibilityBridge: NSObject {
     /// Installs the shim at document-start. The shim overrides
     /// `document.visibilityState` / `document.hidden` with values we control via
     /// `setVisible(_:on:)`, and re-dispatches `visibilitychange` when they change.
-    func install(into controller: WKUserContentController) {
+    func install(into controller: WKUserContentController, initiallyVisible: Bool) {
         let userScript = WKUserScript(
-            source: Self.script,
+            source: Self.script(initiallyVisible: initiallyVisible),
             injectionTime: .atDocumentStart,
             forMainFrameOnly: true
         )
@@ -48,12 +48,15 @@ final class VisibilityBridge: NSObject {
     }
 
     /// Document-start shim. Redefines the Page Visibility getters to read a flag we
-    /// flip from native, defaulting to "visible" so a freshly shown service is live
-    /// immediately. `__wasabiSetVisible` flips the flag and dispatches the event.
-    private static let script = """
+    /// flip from native. The initial value is embedded in the script so an offscreen
+    /// Smart-Sleep wake is hidden from its first instruction rather than running as
+    /// a foreground page until navigation finishes.
+    private static func script(initiallyVisible: Bool) -> String {
+        let initiallyHidden = initiallyVisible ? "false" : "true"
+        return """
     (function () {
       try {
-        var hidden = false;   // default visible — the active service is shown first
+        var hidden = \(initiallyHidden);
         Object.defineProperty(document, "hidden", {
           get: function () { return hidden; },
           configurable: true
@@ -73,4 +76,5 @@ final class VisibilityBridge: NSObject {
       }
     })();
     """
+    }
 }

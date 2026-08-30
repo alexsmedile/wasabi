@@ -8,10 +8,10 @@ import WebKit
 /// dropped on WhatsApp Web opened the PDF instead of attaching it. The earlier
 /// fix stripped `.fileURL` from the view's registered drag types so the drop
 /// "fell through" to the page's DOM handler. That was fragile: WebKit needs
-/// those file types registered to populate `DataTransfer.files`, and it
-/// re-registers them on every WebContent-process relaunch (now frequent, with
-/// the shared process pool + sleep/wake). The strip raced those relaunches,
-/// leaving a state where the drop overlay appeared but no file ever uploaded.
+/// those file types registered to populate `DataTransfer.files`, and it can
+/// re-register them whenever a WebContent process is rebuilt, including an
+/// ordinary sleep/wake. The strip raced those rebuilds, leaving a state where
+/// the drop overlay appeared but no file ever uploaded.
 ///
 /// The drop is now handled the right way: file types stay registered (so the DOM
 /// gets the file), and the *navigation* to a dropped `file://` URL is cancelled
@@ -41,12 +41,10 @@ final class NonNavigatingWebView: WKWebView {
         "Insert from iPhone",
     ]
 
-    /// A hidden (inactive) service must never be a drop target. Sibling WebViews
-    /// stay mounted-but-hidden for instant switching, and each is a registered
-    /// drag destination; when the visible one's WebKit drag registration is stale
-    /// after a wake rebuild, AppKit's drag search can deliver the drop to a hidden
-    /// sibling — the file silently uploads into the *wrong service*. Refuse every
-    /// drag while hidden so only the visible WebView can accept a drop.
+    /// A hidden service must never be a drop target. Inactive WebViews are normally
+    /// removed from the hierarchy, but these guards keep a temporarily hidden view
+    /// from accepting a drag during mount/unmount transitions or future layout
+    /// changes. Only a visible WebView may accept the drop.
     override func draggingEntered(_ sender: NSDraggingInfo) -> NSDragOperation {
         isHiddenOrHasHiddenAncestor ? [] : super.draggingEntered(sender)
     }

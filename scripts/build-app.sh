@@ -37,6 +37,8 @@ SDK="$(xcrun --sdk macosx --show-sdk-path)"
 swiftc \
     -sdk "$SDK" \
     -target arm64-apple-macos15.0 \
+    -swift-version 6 \
+    -warnings-as-errors \
     -framework AppKit \
     -framework WebKit \
     -framework UserNotifications \
@@ -55,6 +57,7 @@ fi
 # Pro checkout URL is injected here, not baked into source — the public repo
 # carries no store URL. Empty (source builds) ⇒ the app's Buy button stays disabled.
 CHECKOUT_URL="${WASABI_CHECKOUT_URL:-}"
+PRO_INFO_URL="${WASABI_PRO_INFO_URL:-}"
 
 echo "==> Writing Info.plist"
 cat > "$APP/Contents/Info.plist" <<PLIST
@@ -68,8 +71,8 @@ cat > "$APP/Contents/Info.plist" <<PLIST
     <key>CFBundleIdentifier</key><string>$BUNDLE_ID</string>
     <key>CFBundleIconFile</key><string>AppIcon</string>
     <key>CFBundlePackageType</key><string>APPL</string>
-    <key>CFBundleShortVersionString</key><string>0.5.4-beta</string>
-    <key>CFBundleVersion</key><string>10</string>
+    <key>CFBundleShortVersionString</key><string>0.5.5-beta</string>
+    <key>CFBundleVersion</key><string>11</string>
     <key>LSMinimumSystemVersion</key><string>15.0</string>
     <key>NSHighResolutionCapable</key><true/>
     <key>NSHumanReadableCopyright</key><string>© 2026 Alessandro Smedile</string>
@@ -78,6 +81,7 @@ cat > "$APP/Contents/Info.plist" <<PLIST
     <key>NSMicrophoneUsageDescription</key><string>Wasabi needs microphone access so web apps (e.g. voice messages, calls) can use it.</string>
     <key>NSCameraUsageDescription</key><string>Wasabi needs camera access so web apps (e.g. video calls) can use it.</string>
     <key>WASABICheckoutURL</key><string>$CHECKOUT_URL</string>
+    <key>WASABIProInfoURL</key><string>$PRO_INFO_URL</string>
 </dict>
 </plist>
 PLIST

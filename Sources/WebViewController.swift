@@ -12,11 +12,6 @@ import WebKit
 /// See .spectacular/ARCHITECTURE.md § Per-service WebView lifecycle.
 @MainActor
 final class WebViewController: NSObject, WKNavigationDelegate, WKUIDelegate, WKDownloadDelegate {
-    /// One pool shared by every service's WebView so WebKit can coordinate
-    /// memory across the WebContent processes. Isolation lives in the per-service
-    /// data store, not here, so sharing the pool does not leak sessions.
-    private static let sharedProcessPool = WKProcessPool()
-
     /// The service this controller hosts. `var` so an Edit (rename / URL change)
     /// can update it in place while keeping the same `id` — and thus the same
     /// isolated data store and stored policy. Only the URL affects loading.
@@ -37,9 +32,9 @@ final class WebViewController: NSObject, WKNavigationDelegate, WKUIDelegate, WKD
     /// "Copy" context menu writes a URL instead of text/image data.
     private lazy var clipboardBridge = ClipboardBridge()
 
-    /// Drives the Page Visibility API so an inactive (hidden but still mounted)
-    /// service reports `document.hidden = true` and backs off its timers/rAF,
-    /// even while Wasabi's window is frontmost. Rebuilt alongside the WebView.
+    /// Drives the Page Visibility API so an inactive or app-backgrounded service
+    /// reports `document.hidden = true` and backs off its timers/rAF. Rebuilt
+    /// alongside the WebView.
     private lazy var visibilityBridge = VisibilityBridge()
 
     /// Desired page-visibility for this service (active = visible). Remembered so
@@ -53,9 +48,15 @@ final class WebViewController: NSObject, WKNavigationDelegate, WKUIDelegate, WKD
     /// rebuilt WebView), not for ordinary in-page navigations.
     private(set) var wasSlept = false
 
-    /// Called on the main actor after a page finishes loading. `MainViewController`
+    /// One-shot callback for the next completed page load. `MainViewController`
     /// uses it to fade out the wake overlay once the reloaded page is on screen.
     var onDidFinish: (() -> Void)?
+
+    /// One-shot completion used by `WebViewPool` for an offscreen Smart-Sleep
+    /// wake. `true` means the main-frame navigation finished; `false` means it
+    /// failed or its content process terminated. Keeping this separate from
+    /// `onDidFinish` avoids the pool clobbering the UI's wake-overlay callback.
+    private var backgroundLoadCompletion: ((Bool) -> Void)?
 
     /// The live WebView, created on demand. Accessing it after `sleep()`
     /// transparently rebuilds it (still backed by the same persistent store).
@@ -76,14 +77,6 @@ final class WebViewController: NSObject, WKNavigationDelegate, WKUIDelegate, WKD
     private func makeWebView() -> WKWebView {
         let config = WKWebViewConfiguration()
 
-        // Share one process pool across every service. This is the documented
-        // multi-WebView pattern: it lets WebKit coordinate memory across the
-        // WebContent processes (shared caches, smarter eviction) instead of
-        // treating each service as an island. Session isolation is unaffected —
-        // that's owned by `websiteDataStore` below, not the pool — so logins,
-        // cookies, and storage stay strictly per-service.
-        config.processPool = Self.sharedProcessPool
-
         // Isolated, persistent per-service session. A stable per-service UUID
         // keys an on-disk store so logins/cookies survive sleep/wake and app
         // restarts, and never cross between services.
@@ -98,7 +91,10 @@ final class WebViewController: NSObject, WKNavigationDelegate, WKUIDelegate, WKD
         // answers the request and forwards posted notifications to macOS.
         notificationBridge.install(into: config.userContentController)
         clipboardBridge.install(into: config.userContentController)
-        visibilityBridge.install(into: config.userContentController)
+        visibilityBridge.install(
+            into: config.userContentController,
+            initiallyVisible: desiredVisible
+        )
 
         // A WKWebView subclass that does NOT register file URLs as a drag type, so
         // dropping a PDF/image onto the page reaches the web app's own JS drop zone
@@ -130,7 +126,7 @@ final class WebViewController: NSObject, WKNavigationDelegate, WKUIDelegate, WKD
 
     func webView(_ webView: WKWebView,
                  decidePolicyFor navigationAction: WKNavigationAction,
-                 decisionHandler: @escaping (WKNavigationActionPolicy) -> Void) {
+                 decisionHandler: @escaping @MainActor @Sendable (WKNavigationActionPolicy) -> Void) {
         guard let url = navigationAction.request.url else {
             decisionHandler(.allow)
             return
@@ -161,7 +157,7 @@ final class WebViewController: NSObject, WKNavigationDelegate, WKUIDelegate, WKD
 
     func webView(_ webView: WKWebView,
                  decidePolicyFor navigationResponse: WKNavigationResponse,
-                 decisionHandler: @escaping (WKNavigationResponsePolicy) -> Void) {
+                 decisionHandler: @escaping @MainActor @Sendable (WKNavigationResponsePolicy) -> Void) {
         if shouldDownload(navigationResponse) {
             decisionHandler(.download)
         } else {
@@ -186,19 +182,25 @@ final class WebViewController: NSObject, WKNavigationDelegate, WKUIDelegate, WKD
             self.log("didFinish: \(webView.url?.absoluteString ?? "?") title=\(webView.title ?? "")")
             // Resolve the real site favicon for the sidebar icon (cached on disk).
             FaviconProvider.shared.resolve(for: self.service.id, from: webView)
-            // Re-assert visibility: a page that loaded while inactive starts at the
-            // shim's `visible` default, so push the real state now that the shim
-            // and the page's listeners are in place.
+            // Re-assert visibility in case focus or service selection changed while
+            // navigation was in flight. The document-start shim already had the
+            // correct initial value, so this is synchronization rather than repair.
             self.visibilityBridge.setVisible(self.desiredVisible, on: webView)
             // The rebuilt page is on screen now — clear the wake flag and let the UI
             // fade out its "waking" overlay.
             self.wasSlept = false
-            self.onDidFinish?()
+            self.finishBackgroundLoad(success: true)
+            let completion = self.onDidFinish
+            self.onDidFinish = nil
+            completion?()
         }
     }
 
     nonisolated func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) {
-        Task { @MainActor in self.log("didFail: \(error.localizedDescription)") }
+        Task { @MainActor in
+            self.log("didFail: \(error.localizedDescription)")
+            self.finishBackgroundLoad(success: false)
+        }
     }
 
     // MARK: - WKDownloadDelegate
@@ -206,7 +208,7 @@ final class WebViewController: NSObject, WKNavigationDelegate, WKUIDelegate, WKD
     func download(_ download: WKDownload,
                   decideDestinationUsing response: URLResponse,
                   suggestedFilename: String,
-                  completionHandler: @escaping (URL?) -> Void) {
+                  completionHandler: @escaping @MainActor @Sendable (URL?) -> Void) {
         let destination = uniqueDownloadURL(for: suggestedFilename)
         log("downloadDestination: \(destination.path)")
         completionHandler(destination)
@@ -250,7 +252,7 @@ final class WebViewController: NSObject, WKNavigationDelegate, WKUIDelegate, WKD
                  requestMediaCapturePermissionFor origin: WKSecurityOrigin,
                  initiatedByFrame frame: WKFrameInfo,
                  type: WKMediaCaptureType,
-                 decisionHandler: @escaping (WKPermissionDecision) -> Void) {
+                 decisionHandler: @escaping @MainActor @Sendable (WKPermissionDecision) -> Void) {
         decisionHandler(.grant)
     }
 
@@ -262,7 +264,7 @@ final class WebViewController: NSObject, WKNavigationDelegate, WKUIDelegate, WKD
     func webView(_ webView: WKWebView,
                  runOpenPanelWith parameters: WKOpenPanelParameters,
                  initiatedByFrame frame: WKFrameInfo,
-                 completionHandler: @escaping ([URL]?) -> Void) {
+                 completionHandler: @escaping @MainActor @Sendable ([URL]?) -> Void) {
         let panel = NSOpenPanel()
         panel.canChooseFiles = true
         panel.canChooseDirectories = false
@@ -368,7 +370,23 @@ final class WebViewController: NSObject, WKNavigationDelegate, WKUIDelegate, WKD
     }
 
     nonisolated func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) {
-        Task { @MainActor in self.log("didFailProvisional: \(error.localizedDescription)") }
+        Task { @MainActor in
+            self.log("didFailProvisional: \(error.localizedDescription)")
+            self.finishBackgroundLoad(success: false)
+        }
+    }
+
+    nonisolated func webViewWebContentProcessDidTerminate(_ webView: WKWebView) {
+        Task { @MainActor in
+            self.log("WebContent process terminated")
+            if self._webView === webView {
+                // Do not auto-reload here: a crashing page would become an
+                // unbounded reload loop. A later selection or explicit reload is
+                // the recovery boundary; Smart Sleep treats this wake as failed.
+                self.didLoad = false
+            }
+            self.finishBackgroundLoad(success: false)
+        }
     }
 
     /// Load the service URL once. Idempotent — repeated calls are no-ops.
@@ -416,6 +434,22 @@ final class WebViewController: NSObject, WKNavigationDelegate, WKUIDelegate, WKD
         visibilityBridge.setVisible(visible, on: live)
     }
 
+    /// Observe exactly one navigation attempt made for an offscreen Smart-Sleep
+    /// wake. Replacing an existing observer invalidates the older wake generation.
+    func observeBackgroundLoad(_ completion: @escaping (Bool) -> Void) {
+        backgroundLoadCompletion = completion
+    }
+
+    func cancelBackgroundLoadObservation() {
+        backgroundLoadCompletion = nil
+    }
+
+    private func finishBackgroundLoad(success: Bool) {
+        guard let completion = backgroundLoadCompletion else { return }
+        backgroundLoadCompletion = nil
+        completion(success)
+    }
+
     // MARK: - Sleep / wake
 
     /// Tear down the WebView to reclaim memory. The WKWebView (and its backing
@@ -435,6 +469,7 @@ final class WebViewController: NSObject, WKNavigationDelegate, WKUIDelegate, WKD
         notificationBridge.uninstall(from: live.configuration.userContentController)
         clipboardBridge.uninstall(from: live.configuration.userContentController)
         live.removeFromSuperview()
+        cancelBackgroundLoadObservation()
         _webView = nil
         didLoad = false
         wasSlept = true

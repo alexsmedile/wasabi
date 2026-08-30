@@ -23,6 +23,13 @@ final class WebViewPool {
     private var timers: [String: Timer] = [:]
     /// When each service last stopped being active (for smart-sleep backoff).
     private var lastActive: [String: Date] = [:]
+    /// Consecutive failed background loads. Successful loads reset the count;
+    /// failures exponentially back off the next wake (capped at one hour).
+    private var smartWakeFailures: [String: Int] = [:]
+    /// Generation tokens make late navigation callbacks and timers harmless.
+    private var smartWakeGeneration: [String: Int] = [:]
+    /// Services currently inside an offscreen load or post-load sync window.
+    private var backgroundWakeActive: Set<String> = []
 
     /// Fired after any service sleeps or wakes (active switch, timer teardown, or
     /// smart-wake cycle) so the UI can repaint per-service state (the status dot).
@@ -56,14 +63,15 @@ final class WebViewPool {
             MainActor.assumeIsolated {
                 guard let self else { return }
                 self.appIsActive = false
-                // You just left Wasabi. Any service still inside its (long,
-                // foreground) grace should collapse onto the short window now —
-                // re-arm it so it tears down promptly instead of lingering minutes.
-                self.rearmForegroundGraces()
+                self.pauseBackgroundSmartWakes()
             }
         }
         nc.addObserver(forName: NSApplication.didBecomeActiveNotification, object: nil, queue: .main) { [weak self] _ in
-            MainActor.assumeIsolated { self?.appIsActive = true }
+            MainActor.assumeIsolated {
+                guard let self else { return }
+                self.appIsActive = true
+                self.resumeBackgroundSmartWakes()
+            }
         }
     }
 
@@ -72,13 +80,32 @@ final class WebViewPool {
         appIsActive ? SmartSleepSchedule.graceForeground : SmartSleepSchedule.graceBackground
     }
 
-    /// On app-resign, re-arm every service that's still in its pre-teardown grace
-    /// (smart-sleep, inactive, not yet slept) so the now-shorter grace applies.
-    private func rearmForegroundGraces() {
-        for id in timers.keys where id != activeID && policy(for: id) == .smartSleep {
-            // Only services still awake are in the grace phase; a slept one is on a
-            // wake-cycle timer and must not be reset to a fresh grace.
-            if controllers[id]?.isAwake == true { schedule(id) }
+    /// On app-resign, stop offscreen network/render work. A service still in its
+    /// pre-teardown grace gets the shorter background grace; an active Smart-Sleep
+    /// wake is torn down immediately; already-slept services remain asleep.
+    private func pauseBackgroundSmartWakes() {
+        var liveStateChanged = false
+        for id in controllers.keys where id != activeID && policy(for: id) == .smartSleep {
+            if backgroundWakeActive.contains(id) {
+                cancelSmartWake(id)
+                if controllers[id]?.isAwake == true {
+                    controllers[id]?.sleep()
+                    liveStateChanged = true
+                }
+            } else if controllers[id]?.isAwake == true {
+                // A service still in its foreground grace gets the shorter
+                // background grace. A completed background wake is handled above.
+                schedule(id)
+            } else {
+                cancelTimer(id) // no periodic full-page wakes while app is inactive
+            }
+        }
+        if liveStateChanged { onLiveStateChanged?() }
+    }
+
+    private func resumeBackgroundSmartWakes() {
+        for id in controllers.keys where id != activeID && policy(for: id) == .smartSleep {
+            if controllers[id]?.isAwake == false { scheduleSmartWake(id) }
         }
     }
 
@@ -98,6 +125,8 @@ final class WebViewPool {
 
     /// Change a service's policy, persist it, and re-evaluate its timers now.
     func setPolicy(_ policy: SleepPolicy, for id: String) {
+        cancelSmartWake(id)
+        smartWakeFailures[id] = 0
         policies[id] = policy
         Self.savePolicy(policy, id: id)
         // Re-arm scheduling for this service unless it's the active one.
@@ -113,7 +142,9 @@ final class WebViewPool {
         let previous = activeID
         activeID = id
         lastActive[id] = Date()
+        smartWakeFailures[id] = 0       // manual activation resets the breaker
         cancelTimer(id)                 // active service is never auto-slept
+        cancelSmartWake(id)
 
         if !previous.isEmpty, previous != id {
             lastActive[previous] = Date()
@@ -128,6 +159,7 @@ final class WebViewPool {
     func sleepNow(_ id: String) {
         guard id != activeID, controllers[id]?.isAwake == true else { return }
         cancelTimer(id)
+        cancelSmartWake(id)
         controllers[id]?.sleep()
         onLiveStateChanged?()
     }
@@ -162,10 +194,22 @@ final class WebViewPool {
 
     /// Smart-sleep: schedule the next background wake based on idle time.
     private func scheduleSmartWake(_ id: String) {
+        guard appIsActive else {
+            cancelTimer(id)
+            return
+        }
         let idle = Date().timeIntervalSince(lastActive[id] ?? Date())
-        let interval = SmartSleepSchedule.wakeInterval(idleFor: idle)
+        let failures = smartWakeFailures[id] ?? 0
+        guard failures < SmartSleepSchedule.maxConsecutiveFailures else {
+            cancelTimer(id)             // circuit open until selection/policy change
+            return
+        }
+        let interval = SmartSleepSchedule.wakeInterval(
+            idleFor: idle,
+            consecutiveFailures: failures
+        )
         armTimer(id, after: interval) { [weak self] in
-            guard let self, id != self.activeID else { return }
+            guard let self, self.appIsActive, id != self.activeID else { return }
             self.smartWakeCycle(id)
         }
     }
@@ -173,23 +217,71 @@ final class WebViewPool {
     /// One smart-sleep cycle: wake (offscreen) to sync + refresh badge, then
     /// sleep again and schedule the next, longer cycle.
     private func smartWakeCycle(_ id: String) {
-        guard let controller = controllers[id], id != activeID else { return }
+        guard appIsActive, let controller = controllers[id], id != activeID else { return }
+        let generation = nextSmartWakeGeneration(id)
+        backgroundWakeActive.insert(id)
+        controller.observeBackgroundLoad { [weak self] success in
+            self?.backgroundLoadFinished(id, generation: generation, success: success)
+        }
         controller.wake()              // rebuilds + reloads from persistent store
         onLiveStateChanged?()
-        armTimer(id, after: SmartSleepSchedule.syncWindow) { [weak self] in
-            guard let self, id != self.activeID else { return }
-            self.controllers[id]?.sleep()
-            self.onLiveStateChanged?()
-            self.scheduleSmartWake(id) // back off further as idle grows
+        armTimer(id, after: SmartSleepSchedule.loadTimeout) { [weak self] in
+            self?.backgroundLoadFinished(id, generation: generation, success: false)
         }
+    }
+
+    private func backgroundLoadFinished(_ id: String, generation: Int, success: Bool) {
+        guard smartWakeGeneration[id] == generation,
+              backgroundWakeActive.contains(id),
+              id != activeID else { return }
+        controllers[id]?.cancelBackgroundLoadObservation()
+
+        if success && appIsActive {
+            smartWakeFailures[id] = 0
+            armTimer(id, after: SmartSleepSchedule.syncWindow) { [weak self] in
+                self?.finishSmartWake(id, generation: generation)
+            }
+        } else {
+            smartWakeFailures[id, default: 0] += 1
+            finishSmartWake(id, generation: generation)
+        }
+    }
+
+    private func finishSmartWake(_ id: String, generation: Int) {
+        guard smartWakeGeneration[id] == generation,
+              backgroundWakeActive.remove(id) != nil,
+              id != activeID else { return }
+        controllers[id]?.sleep()
+        onLiveStateChanged?()
+        scheduleSmartWake(id)
+    }
+
+    @discardableResult
+    private func nextSmartWakeGeneration(_ id: String) -> Int {
+        let next = (smartWakeGeneration[id] ?? 0) &+ 1
+        smartWakeGeneration[id] = next
+        return next
+    }
+
+    private func cancelSmartWake(_ id: String) {
+        cancelTimer(id)
+        _ = nextSmartWakeGeneration(id)
+        backgroundWakeActive.remove(id)
+        controllers[id]?.cancelBackgroundLoadObservation()
     }
 
     // MARK: - Timer helpers
 
-    private func armTimer(_ id: String, after seconds: TimeInterval, _ block: @escaping () -> Void) {
+    private func armTimer(
+        _ id: String,
+        after seconds: TimeInterval,
+        _ block: @escaping @MainActor @Sendable () -> Void
+    ) {
         cancelTimer(id)
         let timer = Timer.scheduledTimer(withTimeInterval: seconds, repeats: false) { _ in
-            Task { @MainActor in block() }
+            MainActor.assumeIsolated {
+                block()
+            }
         }
         timers[id] = timer
     }
@@ -215,9 +307,12 @@ final class WebViewPool {
     /// caller's responsibility (see MainViewController remove path).
     func removeController(id: String) {
         cancelTimer(id)
+        cancelSmartWake(id)
         controllers[id] = nil
         policies[id] = nil
         lastActive[id] = nil
+        smartWakeFailures[id] = nil
+        smartWakeGeneration[id] = nil
     }
 
     // MARK: - UserDefaults

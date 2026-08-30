@@ -77,10 +77,14 @@ extension SleepPolicy: Codable {
 enum SmartSleepSchedule {
     /// (idle-at-least, then-wake-every) buckets, longest idle first.
     static let buckets: [(idleAtLeast: TimeInterval, wakeEvery: TimeInterval)] = [
-        (idleAtLeast: 60 * 60, wakeEvery: 15 * 60),   // idle ≥ 1h  → wake every 15m
-        (idleAtLeast: 30 * 60, wakeEvery:  5 * 60),   // idle ≥ 30m → wake every 5m
-        (idleAtLeast:       0, wakeEvery:       60),   // recent     → wake every 1m
+        (idleAtLeast: 60 * 60, wakeEvery: 60 * 60),   // idle ≥ 1h  → wake every 60m
+        (idleAtLeast: 30 * 60, wakeEvery: 15 * 60),   // idle ≥ 30m → wake every 15m
+        (idleAtLeast:       0, wakeEvery:  5 * 60),   // recent     → wake every 5m
     ]
+
+    /// Stop automatic wakes after repeated failures. Selecting the service or
+    /// changing its policy resets the breaker and gives it a clean retry boundary.
+    static let maxConsecutiveFailures = 3
 
     /// Grace period after you switch *away* before the first teardown. Keeps the
     /// service live briefly so flicking between services (or a quick glance
@@ -97,14 +101,19 @@ enum SmartSleepSchedule {
     static let graceForeground: TimeInterval = 3 * 60
     static let graceBackground: TimeInterval = 60
 
-    /// How long to stay awake each cycle, letting the service sync + badge.
+    /// Maximum time an offscreen wake may spend loading. A failed or stalled load
+    /// is torn down and retried later with exponential backoff.
+    static let loadTimeout: TimeInterval = 30
+
+    /// How long to stay awake after navigation completes, letting the service
+    /// finish websocket reconnects and refresh its badge.
     static let syncWindow: TimeInterval = 8
 
     /// Next wake interval given how long the service has been idle.
-    static func wakeInterval(idleFor idle: TimeInterval) -> TimeInterval {
-        for bucket in buckets where idle >= bucket.idleAtLeast {
-            return bucket.wakeEvery
-        }
-        return buckets.last!.wakeEvery
+    static func wakeInterval(idleFor idle: TimeInterval, consecutiveFailures: Int = 0) -> TimeInterval {
+        let base = buckets.first(where: { idle >= $0.idleAtLeast })?.wakeEvery
+            ?? buckets.last!.wakeEvery
+        let multiplier = 1 << min(max(consecutiveFailures, 0), 3)
+        return min(base * TimeInterval(multiplier), 60 * 60)
     }
 }

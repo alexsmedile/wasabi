@@ -45,9 +45,11 @@ final class LicenseManager {
     private static let lastVerdictInvalidKey = "wasabi.license.lastVerdictInvalid"
     private static let instanceIDKey = "wasabi.license.instanceID"   // LS device instance (not secret)
     private static let trialFirstLaunchKey = "wasabi.trial.firstLaunch"   // Date, stamped once
+    private static let proOfferSeenKey = "wasabi.proOffer.seen"
 
     /// Full-unlock trial length. ponytail: local Date, not DRM.
     static let trialDays = 7
+    static let automaticProOfferDelay: TimeInterval = 86_400
 
     private let defaults: UserDefaults
     let backend: LicenseBackend
@@ -152,12 +154,39 @@ final class LicenseManager {
         return max(0, Self.trialDays - Int(elapsed / 86_400))
     }
 
-    /// Stamp the trial start on first launch (idempotent — only writes if unset).
-    /// Existing installs have no key, so they get a fresh trial: deliberate goodwill.
-    func startTrialIfFirstLaunch() {
+    /// A trial can never be restarted after its first stamp.
+    var canStartTrial: Bool {
+        defaults.object(forKey: Self.trialFirstLaunchKey) == nil && !isActivated
+    }
+
+    /// Start the full Pro trial once. Fresh installs call this automatically so the
+    /// app opens without an onboarding decision or credit-card request.
+    func startTrial() {
+        guard !isActivated else { return }
         if defaults.object(forKey: Self.trialFirstLaunchKey) == nil {
             defaults.set(Date(), forKey: Self.trialFirstLaunchKey)
         }
+    }
+
+    /// Seconds until the one-time automatic Pro offer is due. `nil` means no offer:
+    /// the user is licensed, has already seen it, or has no trial timestamp yet.
+    var timeUntilAutomaticProOffer: TimeInterval? {
+        guard !isActivated,
+              !defaults.bool(forKey: Self.proOfferSeenKey),
+              let start = defaults.object(forKey: Self.trialFirstLaunchKey) as? Date else {
+            return nil
+        }
+        return Self.proOfferDelay(elapsed: Date().timeIntervalSince(start))
+    }
+
+    static func proOfferDelay(elapsed: TimeInterval) -> TimeInterval {
+        max(0, automaticProOfferDelay - max(0, elapsed))
+    }
+
+    /// Any explicit or automatic visit to the Upgrade window satisfies the one-time
+    /// day-one offer. Feature gates can still show Upgrade later when relevant.
+    func markProOfferSeen() {
+        defaults.set(true, forKey: Self.proOfferSeenKey)
     }
 
     /// The ONLY entitlement question. `trial`/`pro` unlock everything gated; `free`
@@ -170,7 +199,7 @@ final class LicenseManager {
         switch tier {
         case .pro:   return "Wasabi Pro ✓"
         case .trial: return "Wasabi Pro — Trial: \(trialDaysRemaining) day\(trialDaysRemaining == 1 ? "" : "s") left"
-        case .free:  return "Activate Wasabi Pro…"
+        case .free:  return "Upgrade…"
         }
     }
 
@@ -301,6 +330,15 @@ final class LicenseManager {
         assert(trialIsActive(elapsed: Double(trialDays) * 86_400 - 1), "last second → active")
         assert(!trialIsActive(elapsed: Double(trialDays) * 86_400), "exactly N days → expired")
         assert(!trialIsActive(elapsed: -1), "clock set back → expired, not active-forever")
+
+        assert(proOfferDelay(elapsed: 0) == automaticProOfferDelay,
+               "first launch → offer waits one day")
+        assert(proOfferDelay(elapsed: automaticProOfferDelay - 1) == 1,
+               "one second before day one → wait one second")
+        assert(proOfferDelay(elapsed: automaticProOfferDelay) == 0,
+               "day one → offer is due")
+        assert(proOfferDelay(elapsed: -1) == automaticProOfferDelay,
+               "clock rollback cannot make the offer immediately due")
 
         #if WASABI_DEV
         assert(StubLicenseBackend.looksValid("WASABI-AAAA-BBBB-CCCC"), "well-formed demo key accepted")

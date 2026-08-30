@@ -4,6 +4,8 @@ import AppKit
 final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var window: NSWindow!
     private var mainController: MainViewController!
+    private var launchFlowCompleted = false
+    private var proOfferTimer: Timer?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         // Install the main menu so ⌘C/⌘V/⌘X/⌘A reach the focused WebView via the
@@ -17,17 +19,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             UpdateChecker.selfCheck()
         }
 
-        // Freemium: the app ALWAYS opens (no launch wall). Entitlement is enforced
-        // at the feature gates via LicenseManager.isUnlocked(_:), not here. First
-        // launch stamps the local trial; a stored key re-checks in the background
-        // (grace window carries offline users). LicenseWindow is now a menu-reachable
-        // "Activate / Upgrade" entry point, not a launch gate. To test Pro/free
-        // gating in a dev build, set WASABI_DEV_FORCE_TIER=pro|trial|free.
-        LicenseManager.shared.startTrialIfFirstLaunch()
+        // Lowest-friction first run: start the 7-day Pro trial automatically and
+        // open the app. No account, card, or onboarding decision is required.
+        LicenseManager.shared.startTrial()
+        finishLaunching()
+    }
+
+    private func finishLaunching() {
+        guard !launchFlowCompleted else { return }
+        launchFlowCompleted = true
         if LicenseManager.shared.isActivated {
             LicenseManager.shared.revalidateInBackground()
         }
         showMainWindow()
+        scheduleAutomaticProOffer()
     }
 
     private func showMainWindow() {
@@ -58,11 +63,52 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         true
     }
 
-    /// App menu ▸ License… — open the activation window any time. `forMenu` shows the
-    /// activated-status panel when already Pro, else the key field. LicenseWindow
-    /// self-retains; on activation the tier flips to `.pro` and gates lift next check.
+    func applicationDidBecomeActive(_ notification: Notification) {
+        guard launchFlowCompleted else { return }
+        scheduleAutomaticProOffer()
+    }
+
+    /// Show Upgrade once, after 24 hours from the original trial start. If another
+    /// license window is open or Wasabi is in the background, retry later instead
+    /// of interrupting the user in the wrong context.
+    private func scheduleAutomaticProOffer() {
+        proOfferTimer?.invalidate()
+        proOfferTimer = nil
+        guard let delay = LicenseManager.shared.timeUntilAutomaticProOffer else { return }
+
+        if delay <= 0 {
+            guard NSApp.isActive, !LicenseWindow.isPresenting else {
+                proOfferTimer = Timer.scheduledTimer(
+                    timeInterval: 60,
+                    target: self,
+                    selector: #selector(automaticProOfferTimerFired),
+                    userInfo: nil,
+                    repeats: false
+                )
+                return
+            }
+            LicenseWindow(mode: .upgrade(reason: "Your 7-day Pro trial is active. No card required."))
+                .present(onComplete: {})
+            return
+        }
+
+        proOfferTimer = Timer.scheduledTimer(
+            timeInterval: delay,
+            target: self,
+            selector: #selector(automaticProOfferTimerFired),
+            userInfo: nil,
+            repeats: false
+        )
+    }
+
+    @objc private func automaticProOfferTimerFired() {
+        scheduleAutomaticProOffer()
+    }
+
+    /// App menu ▸ License… — open the license window any time. `forMenu` shows the
+    /// activated-status panel when already Pro, otherwise the compact Upgrade offer.
     @objc func showLicenseWindow() {
-        LicenseWindow.forMenu().present(onActivated: {})
+        LicenseWindow.forMenu().present(onComplete: {})
     }
 
     /// Relabel the License menu item to live status (Pro ✓ / Trial: N days / Activate)
