@@ -1,3 +1,9 @@
+---
+schema: make-a-change/todo/v1
+extensions:
+  - "octopus:all"
+---
+
 # TODO — Wasabi
 
 The current public build is `0.6.2-beta` build `14`. It is suitable for a
@@ -17,10 +23,9 @@ the completed release unless tester evidence points to a regression.
   upload/download, clipboard, camera/microphone, activation/deactivation,
   licensed third-service switching, and updater behavior.
 - [ ] Finish the WIP website in
-  `/Users/alex/work/wasabi/repos/wasabi-website`: visually review the aligned
+  the separate `wasabi-website` repository: visually review the aligned
   `0.6.2-beta` page on desktop/mobile, add the dedicated Pro page, and decide
   whether it is ready to publish.
-
 ## Website alignment
 
 - [x] Change the primary download and version copy to `0.6.2-beta` and use the
@@ -28,20 +33,24 @@ the completed release unless tester evidence points to a regression.
 - [x] Explain the automatic seven-day Pro trial, Wasabi Free for two services,
   Pro features, and the limited-time €9.90/US$9.90 one-time launch offer.
 - [x] Keep the signed download primary and GitHub/source access secondary.
+
 - [x] Correct the service-organization copy: drag-to-reorder is Pro, not a
   universal Free capability.
 - [x] State the notification tradeoff accurately: sleeping services cannot
   notify; Keep Running is the instant-notification option.
 - [x] Link Privacy, License, release notes, and source clearly.
+
 - [ ] Add a dedicated Pro information/sales page before pointing “Discover Pro”
   away from checkout.
 - [x] Pass the website production build, rendered-page test, and lint.
+
 - [x] Add a stable `/download` page, route every homepage download CTA through
   it, and retain a direct current-DMG fallback.
 - [x] Add a guarded `/buy` redirect to the production Lemon Squeezy checkout;
   keep the real URL in ignored local/hosted configuration.
 - [x] Set `WASABI_CHECKOUT_URL` as a secret in the hosted Sites environment.
 - [x] Choose `https://wasabi.gin.so/` as the first canonical website origin.
+
 - [x] Deploy the updated owner-only Site, verify `/`, `/download`, and `/buy` on
   its Sites hostname, and attach `wasabi.gin.so`.
 - [ ] Add the CNAME and two Sites verification TXT records in the `gin.so` DNS

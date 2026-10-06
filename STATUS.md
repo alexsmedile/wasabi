@@ -1,6 +1,29 @@
+---
+schema: make-a-change/status/v1
+updated: 2026-08-30
+summary: "0.6.2-beta (build 14) is published as a notarized public prerelease; app code frozen for friend-beta observation."
+next: "Run the friend beta and triage feedback; finish the website launch pass."
+branch: main
+---
+
 # Status — Wasabi
 
-**Last updated:** 2026-08-30
+## Current state
+
+- `0.6.2-beta` build 14 published 2026-08-30 as a notarized public prerelease; the update manifest is live.
+- App code is frozen; resume only for evidence-backed fixes or the website launch pass.
+- Website lives in the separate `wasabi-website` repository (see «Resume points»).
+
+## Next
+
+- Send the DMG to a small tester group and triage feedback (Next session in [TODO.md](TODO.md)).
+- Finish the website alignment items.
+
+## Resume here
+
+1. `git status --short --branch`
+2. Read [TODO.md](TODO.md) «Next session» and [docs/RELEASING.md](docs/RELEASING.md).
+
 **Current objective:** Friend-beta observation; resume only for evidence-backed fixes or the website launch pass.
 **Overall state:** `0.6.2-beta` build `14` is published as a notarized public prerelease, the update manifest is live, and the app code is frozen while these hand-off documents await review.
 
@@ -79,7 +102,7 @@ tester hand-off checklist.
 
 - [`TODO.md`](TODO.md): prioritized next work and website-alignment requirements.
 - [`docs/RELEASING.md`](docs/RELEASING.md): friend-beta hand-off and future release procedure.
-- WIP website: `/Users/alex/work/wasabi/repos/wasabi-website` (locally aligned to
+- WIP website: the separate `wasabi-website` repository (locally aligned to
   `0.6.2-beta`, Free/Pro, launch pricing, and notification tradeoffs; build,
   rendered-page test, and lint pass. Its stable `/download` page and guarded
   `/buy` Lemon Squeezy handoff work locally, and the hosted checkout secret is
