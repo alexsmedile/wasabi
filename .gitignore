@@ -49,3 +49,7 @@ marketing/
 
 # Local-only working files (site prototype, marketing) — not part of the public source
 _local/
+
+# OPF local companions (shared content is committed; personal notes stay local)
+*.local.*
+.octopus.local/
